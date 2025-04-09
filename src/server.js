@@ -32,7 +32,6 @@ console.log("Connecting to mongodb...");
         // Use routes
         app.use('/api/auth', authRoutes);
         app.use('/api', sensorRoutes);
-	app.use('/api/measurements', measurementRoutes);
 
 
         const PORT = process.env.PORT || 5000;
