@@ -4,7 +4,6 @@ const passport = require('passport');
 const dotenv = require('dotenv');
 const authRoutes = require('./routes/authRoutes');
 const sensorRoutes = require('./routes/sensorRoutes');
-const measurementRoutes = require('./routes/measurementsRoutes');
 
 
 
