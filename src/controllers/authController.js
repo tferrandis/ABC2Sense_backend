@@ -14,7 +14,7 @@ exports.register = async (req, res) => {
 };
 
 exports.login = (req, res, next) => {
-  console.log("🔍 Datos recibidos:", req.body); // Para ver qué llega en la petición
+  console.log("🔍 Datos recibidos:", req.body); 
 
   passport.authenticate('local', { session: false }, (err, user, info) => {
     if (err) {
@@ -34,11 +34,19 @@ exports.login = (req, res, next) => {
       }
 
       console.log("✅ Login exitoso para:", user.username);
-      
-      // Generar y devolver token
-      const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '8h' });
 
-      return res.json({ user, token });
+      // Definir duración y caducidad
+      const expiresIn = '8h';
+      const expirationDate = new Date(Date.now() + 8 * 60 * 60 * 1000); 
+
+      // Generar token
+      const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn });
+
+      return res.json({
+        user,
+        token,
+        expiresAt: expirationDate.toISOString() s
+      });
     });
   })(req, res, next);
 };
