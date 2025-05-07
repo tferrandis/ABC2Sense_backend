@@ -45,7 +45,7 @@ exports.login = (req, res, next) => {
       return res.json({
         user,
         token,
-        expiresAt: expirationDate.toISOString() s
+        expiresAt: expirationDate.toISOString() 
       });
     });
   })(req, res, next);
