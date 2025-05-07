@@ -1,3 +1,4 @@
+// controllers/sensorController.js
 const Sensor = require('../models/sensor');
 const SensorDefinition = require('../models/sensorDefinition');
 
@@ -5,17 +6,16 @@ const SensorDefinition = require('../models/sensorDefinition');
 exports.addMeasure = async (req, res) => {
   const { timestamp = new Date(), latitude = null, longitude = null, sensors } = req.body;
 
-  // Validar formato del campo "sensors"
   if (!sensors || typeof sensors !== 'object' || Object.keys(sensors).length === 0) {
     return res.status(400).json({ error: "Sensors must be a non-empty object." });
   }
 
   try {
-    // Convertir las keys (sensorIds) a números
+    const userId = req.user._id;
+
     const rawEntries = Object.entries(sensors);
     const entries = rawEntries.map(([k, v]) => [parseInt(k), v]);
 
-    // Validar si existen esos sensorId definidos
     const sensorIds = entries.map(([id]) => id);
     const definedSensors = await SensorDefinition.find({ sensorId: { $in: sensorIds } });
     const definedIds = definedSensors.map(s => s.sensorId);
@@ -25,12 +25,11 @@ exports.addMeasure = async (req, res) => {
       return res.status(400).json({ error: `Undefined sensor IDs: ${invalidIds.join(', ')}` });
     }
 
-    // Guardar cada medida
     const savedSensors = [];
 
     for (let [sensorId, value] of entries) {
       const sensor = new Sensor({
-        user: req.user._id,
+        user: userId,
         timestamp: new Date(timestamp),
         sensorId,
         value,
@@ -70,7 +69,7 @@ exports.getMeasures = async (req, res) => {
   }
 };
 
-// Sensor definitions
+// Crear definición de sensor
 exports.createSensorDefinition = async (req, res) => {
   const { sensorId, title, measure, description } = req.body;
   try {
@@ -85,6 +84,7 @@ exports.createSensorDefinition = async (req, res) => {
   }
 };
 
+// Obtener definiciones de sensores
 exports.getSensorDefinitions = async (req, res) => {
   try {
     const sensors = await SensorDefinition.find({});
