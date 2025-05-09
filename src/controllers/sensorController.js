@@ -6,25 +6,14 @@ const SensorDefinition = require('../models/sensorDefinition');
 exports.addMeasure = async (req, res) => {
   const { timestamp = new Date(), latitude = null, longitude = null, sensors } = req.body;
 
-  if (!sensors || typeof sensors !== 'object' || Object.keys(sensors).length === 0) {
-    return res.status(400).json({ error: "Sensors must be a non-empty object." });
-  }
-
+  
   try {
     const userId = req.user._id;
 
     const rawEntries = Object.entries(sensors);
     const entries = rawEntries.map(([k, v]) => [parseInt(k), v]);
 
-    const sensorIds = entries.map(([id]) => id);
-    const definedSensors = await SensorDefinition.find({ sensorId: { $in: sensorIds } });
-    const definedIds = definedSensors.map(s => s.sensorId);
-    const invalidIds = sensorIds.filter(id => !definedIds.includes(id));
-
-    if (invalidIds.length > 0) {
-      return res.status(400).json({ error: `Undefined sensor IDs: ${invalidIds.join(', ')}` });
-    }
-
+   
     const savedSensors = [];
 
     for (let [sensorId, value] of entries) {
@@ -144,12 +133,12 @@ exports.getMeasures = async (req, res) => {
 
 // Crear definición de sensor
 exports.createSensorDefinition = async (req, res) => {
-  const { sensorId, title, measure, description } = req.body;
+  const { sensorId, title, measure,unit,description } = req.body;
   try {
     const existing = await SensorDefinition.findOne({ sensorId });
     if (existing) return res.status(400).json({ message: "Sensor ID already exists" });
 
-    const def = new SensorDefinition({ sensorId, title, description, measure });
+    const def = new SensorDefinition({ sensorId, title, description,unit, measure });
     await def.save();
     res.status(201).json(def);
   } catch (error) {
