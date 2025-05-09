@@ -50,10 +50,22 @@ exports.addMeasure = async (req, res) => {
   }
 };
 
-// Obtener medidas del usuario con filtro por timestamp
+const R = 6371000; 
+
 exports.getMeasures = async (req, res) => {
-  const { from, to } = req.query;
-  const filter = { user: req.user._id };
+  const {
+    from,
+    to,
+    lat,
+    lng,
+    radius,
+    page = 1,
+    limit = 10
+  } = req.query;
+
+  const filter = {
+    user: req.user._id
+  };
 
   if (from || to) {
     filter.timestamp = {};
@@ -61,13 +73,74 @@ exports.getMeasures = async (req, res) => {
     if (to) filter.timestamp.$lte = new Date(to);
   }
 
+  let haversineQuery = {};
+
+  if (lat && lng && radius) {
+    const latRad = parseFloat(lat) * Math.PI / 180;
+    const lngRad = parseFloat(lng) * Math.PI / 180;
+
+    haversineQuery = {
+      $expr: {
+        $lte: [
+          {
+            $multiply: [
+              R,
+              {
+                $acos: {
+                  $add: [
+                    {
+                      $multiply: [
+                        { $sin: { $degreesToRadians: "$coordinates.latitude" } },
+                        Math.sin(latRad)
+                      ]
+                    },
+                    {
+                      $multiply: [
+                        { $cos: { $degreesToRadians: "$coordinates.latitude" } },
+                        Math.cos(latRad),
+                        {
+                          $cos: {
+                            $subtract: [
+                              { $degreesToRadians: "$coordinates.longitude" },
+                              lngRad
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          parseFloat(radius)
+        ]
+      }
+    };
+  }
+
   try {
-    const measures = await Sensor.find(filter);
-    res.status(200).json(measures);
+    const query = Object.keys(haversineQuery).length > 0
+      ? { $and: [filter, haversineQuery] }
+      : filter;
+
+    const measures = await Sensor.find(query)
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const total = await Sensor.countDocuments(query);
+
+    res.status(200).json({
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      measures
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
+
 
 // Crear definición de sensor
 exports.createSensorDefinition = async (req, res) => {
