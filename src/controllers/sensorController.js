@@ -49,7 +49,7 @@ exports.getMeasures = async (req, res) => {
     lng,
     radius,
     page = 1,
-    limit = 10
+    limit = 20
   } = req.query;
 
   const filter = {
