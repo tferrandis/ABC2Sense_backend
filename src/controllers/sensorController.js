@@ -10,7 +10,7 @@ const { timestamp = new Date(), latitude = null, longitude = null, measurements 
   try {
     const userId = req.user._id;
 
-    const rawEntries = Object.entries(sensors);
+    const rawEntries = Object.entries(measurements);
     const entries = rawEntries.map(([k, v]) => [parseInt(k), v]);
 
    
