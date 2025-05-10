@@ -4,7 +4,7 @@ const SensorDefinition = require('../models/sensorDefinition');
 
 // Guardar medida para varios sensores
 exports.addMeasure = async (req, res) => {
-  const { timestamp = new Date(), latitude = null, longitude = null, sensors } = req.body;
+const { timestamp = new Date(), latitude = null, longitude = null, measurements } = req.body;
 
   
   try {
