@@ -4,16 +4,16 @@ const SensorDefinition = require('../models/sensorDefinition');
 
 // Guardar medida para varios sensores
 exports.addMeasure = async (req, res) => {
-const { timestamp = new Date(), latitude = null, longitude = null, measurements } = req.body;
+  const { timestamp = new Date(), latitude = null, longitude = null, measurements } = req.body;
 
-  
+
   try {
     const userId = req.user._id;
 
     const rawEntries = Object.entries(measurements);
     const entries = rawEntries.map(([k, v]) => [parseInt(k), v]);
 
-   
+
     const savedSensors = [];
 
     for (let [sensorId, value] of entries) {
@@ -40,7 +40,7 @@ const { timestamp = new Date(), latitude = null, longitude = null, measurements 
 };
 
 
-const R = 6371; // Radio de la Tierra en km
+  const R = 6371; // Radio de la Tierra en km
 
 exports.getMeasures = async (req, res) => {
   const {
@@ -114,16 +114,11 @@ exports.getMeasures = async (req, res) => {
       ? { $and: [filter, haversineQuery] }
       : filter;
 
-    const sensors = await Sensor.find(query)
-      .sort({ timestamp: -1 }) // más nuevos primero
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
-
-    const total = await Sensor.countDocuments(query);
+    const allSensors = await Sensor.find(query).sort({ timestamp: -1 });
 
     // Agrupar por timestamp y coordenadas
     const grouped = {};
-    for (const sensor of sensors) {
+    for (const sensor of allSensors) {
       const key = `${sensor.timestamp.toISOString()}_${sensor.coordinates.latitude}_${sensor.coordinates.longitude}`;
       if (!grouped[key]) {
         grouped[key] = {
@@ -138,13 +133,18 @@ exports.getMeasures = async (req, res) => {
       grouped[key].measurements[sensor.sensorId] = sensor.value;
     }
 
-    const measures = Object.values(grouped);
+    const allGroups = Object.values(grouped);
+
+    const total = allGroups.length;
+
+    // Aplicar paginación sobre los grupos
+    const paginated = allGroups.slice((page - 1) * limit, page * limit);
 
     res.status(200).json({
       total,
       page: parseInt(page),
       limit: parseInt(limit),
-      measures,
+      measures: paginated
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -154,12 +154,12 @@ exports.getMeasures = async (req, res) => {
 
 // Crear definición de sensor
 exports.createSensorDefinition = async (req, res) => {
-  const { sensorId, title, measure,unit,description } = req.body;
+  const { sensorId, title, measure, unit, description } = req.body;
   try {
     const existing = await SensorDefinition.findOne({ sensorId });
     if (existing) return res.status(400).json({ message: "Sensor ID already exists" });
 
-    const def = new SensorDefinition({ sensorId, title, description,unit, measure });
+    const def = new SensorDefinition({ sensorId, title, description, unit, measure });
     await def.save();
     res.status(201).json(def);
   } catch (error) {
