@@ -41,6 +41,8 @@ const { timestamp = new Date(), latitude = null, longitude = null, measurements 
 
 const R = 6371000; 
 
+const R = 6371; // Radio de la Tierra en km
+
 exports.getMeasures = async (req, res) => {
   const {
     from,
@@ -113,17 +115,37 @@ exports.getMeasures = async (req, res) => {
       ? { $and: [filter, haversineQuery] }
       : filter;
 
-    const measures = await Sensor.find(query)
+    const sensors = await Sensor.find(query)
+      .sort({ timestamp: -1 }) // más nuevos primero
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 
     const total = await Sensor.countDocuments(query);
 
+    // Agrupar por timestamp y coordenadas
+    const grouped = {};
+    for (const sensor of sensors) {
+      const key = `${sensor.timestamp.toISOString()}_${sensor.coordinates.latitude}_${sensor.coordinates.longitude}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          coordinates: {
+            latitude: sensor.coordinates.latitude,
+            longitude: sensor.coordinates.longitude,
+          },
+          timestamp: sensor.timestamp,
+          measurements: {},
+        };
+      }
+      grouped[key].measurements[sensor.sensorId] = sensor.value;
+    }
+
+    const measures = Object.values(grouped);
+
     res.status(200).json({
       total,
       page: parseInt(page),
       limit: parseInt(limit),
-      measures
+      measures,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
