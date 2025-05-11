@@ -39,7 +39,6 @@ const { timestamp = new Date(), latitude = null, longitude = null, measurements 
   }
 };
 
-const R = 6371000; 
 
 const R = 6371; // Radio de la Tierra en km
 
