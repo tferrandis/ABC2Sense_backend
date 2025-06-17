@@ -1,6 +1,10 @@
 const passport = require('passport');
 const User = require('../models/user');
 const jwt = require('jsonwebtoken');
+const Sensor = require('../models/sensor');
+const Measurement = require('../models/measurement'); 
+const { sendMail } = require('../services/mailer');
+
 
 exports.register = async (req, res) => {
   const { username, email, password } = req.body;
@@ -50,3 +54,41 @@ exports.login = (req, res, next) => {
     });
   })(req, res, next);
 };
+
+
+exports.deleteAccount = async (req, res) => {
+  try {
+    await Sensor.deleteMany({ user: req.user._id });
+
+    await Measurement.deleteMany({ user_id: req.user._id });
+
+        await User.findByIdAndDelete(req.user._id);
+
+    res.json({ message: 'User and related data deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.forgotPassword = async (req, res) => {
+  const { email } = req.body;
+  const user = await User.findOne({ email });
+
+  if (!user) return res.status(404).json({ message: 'User not found' });
+
+  const token = crypto.randomBytes(32).toString('hex');
+  resetTokens.set(token, user._id);
+
+  const resetUrl = `test`;
+
+  await sendMail({
+    to: user.email,
+    subject: 'Password Reset',
+    html: `<p>Click the following link to reset your password:</p><a href="${resetUrl}">${resetUrl}</a>`
+  });
+
+  res.json({ message: 'Reset link sent to email' });
+};
+
+
+

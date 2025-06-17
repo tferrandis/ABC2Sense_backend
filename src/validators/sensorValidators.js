@@ -5,7 +5,6 @@ const measurementValidator = [
   check('_id').isMongoId().withMessage('El ID debe ser un ObjectId válido'),
 
   // Validar device_id como un ObjectId válido
-  check('device_id').isMongoId().withMessage('El device_id debe ser un ObjectId válido'),
 
   // Validar user_id como un ObjectId válido
   check('user_id').isMongoId().withMessage('El user_id debe ser un ObjectId válido'),
@@ -21,8 +20,7 @@ const measurementValidator = [
   check('measurements').isArray({ min: 1 }).withMessage('Debe haber al menos una medición'),
 
   // Validar cada objeto dentro del array de measurements
-  body('measurements.*.sensor_id').isNumeric().withMessage('El sensor_id debe ser un número'),
-  body('measurements.*.value').notEmpty().withMessage('El valor no puede estar vacío'), // Puedes ajustar esto según los valores posibles (Number o String)
+  body('measurements.*.value').notEmpty().withMessage('El valor no puede estar vacío')
 ];
 
 // Función para manejar los errores de validación
