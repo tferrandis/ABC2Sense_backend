@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 # Proyecto de API con Node.js y MongoDB
 
@@ -117,3 +118,7 @@ El servidor debería estar corriendo en `http://localhost:5000` (o en el puerto 
 - La autenticación está implementada usando `passport.js` con estrategias `Local` y `JWT`.
 ```
 
+=======
+# ABC2Sense_backend
+Backend for abc2sense
+>>>>>>> 1f19f5b965fef7b855a945d670909bc315239476

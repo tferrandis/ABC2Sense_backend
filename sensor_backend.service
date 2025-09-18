@@ -1,0 +1,15 @@
+[Unit]
+Description=Sensor Backend Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /root/sensor/backend/src/server.js
+WorkingDirectory=/root/sensor/backend
+KillMode=process
+Restart=always
+RestartSec=3
+User=root
+Enviroment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
