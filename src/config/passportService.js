@@ -1,42 +1,3 @@
-<<<<<<< HEAD
-const passport = require('passport');
-const LocalStrategy = require('passport-local').Strategy;
-const bcrypt = require('bcryptjs');
-const User = require('../models/user');
-
-// Configura la estrategia local
-passport.use(new LocalStrategy({
-  usernameField: 'identifier',  // 'identifier' puede ser email o username
-  passwordField: 'password'
-}, async (identifier, password, done) => {
-  try {
-    console.log('Identifier received:', identifier);
-
-    // Intentar buscar al usuario por email o username
-    const user = await User.findOne({
-      $or: [
-        { email: identifier },
-        { username: identifier }
-      ]
-    });
-   
-
-    if (!user) {
-      console.log("aki?")
-      return done(null, false, { message: 'User not found' });
-    }
-
-    // Comparar la contraseña ingresada con la almacenada en la base de datos
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return done(null, false, { message: 'Incorrect user or password' });
-    }
-
-    // Si las credenciales son correctas, devolver el usuario
-    return done(null, true, {});
-  } catch (error) {
-=======
-
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const JwtStrategy = require('passport-jwt').Strategy;
@@ -48,72 +9,72 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 /**
- * 🔐 Estrategia Local (Autenticación con username o email y password)
+ * 🔐 Estrategia Local (autenticación con email o username + password)
  */
-passport.use(new LocalStrategy({
-  usernameField: 'identifier', // Permite email o username
-  passwordField: 'password',
-  session: false
-}, async (identifier, password, done) => {
-  try {
-    console.log("🔍 Buscando usuario con:", identifier);
+passport.use(
+  new LocalStrategy(
+    {
+      usernameField: 'identifier', // puede ser email o username
+      passwordField: 'password',
+      session: false,
+    },
+    async (identifier, password, done) => {
+      try {
+        console.log('🔍 Buscando usuario con:', identifier);
 
-    // Buscar usuario por email o username
-    const user = await User.findOne({
-      $or: [{ email: identifier }, { username: identifier }]
-    });
+        // Buscar usuario por email o username
+        const user = await User.findOne({
+          $or: [{ email: identifier }, { username: identifier }],
+        });
 
-    if (!user) {
-      console.warn("⚠️ Usuario no encontrado:", identifier);
-      return done(null, false, { message: 'Usuario no encontrado' });
+        if (!user) {
+          console.warn('⚠️ Usuario no encontrado:', identifier);
+          return done(null, false, { message: 'Usuario no encontrado' });
+        }
+
+        // Comparar la contraseña encriptada
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+          console.warn('❌ Contraseña incorrecta para:', identifier);
+          return done(null, false, { message: 'Credenciales inválidas' });
+        }
+
+        console.log('✅ Login exitoso para:', user.username);
+        return done(null, user);
+      } catch (error) {
+        console.error('🚨 Error en autenticación local:', error);
+        return done(error);
+      }
     }
+  )
+);
 
-    console.log("✅ Usuario encontrado:", user.username);
-
-    // Comparar contraseña encriptada
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      console.warn("❌ Contraseña incorrecta para:", identifier);
-      return done(null, false, { message: 'Contraseña incorrecta' });
-    }
-
-    console.log("🔑 Login exitoso para:", user.username);
-    return done(null, user);
-  } catch (error) {
-    console.error("🚨 Error en autenticación:", error);
->>>>>>> 1f19f5b965fef7b855a945d670909bc315239476
-    return done(error);
-  }
-}));
-
-<<<<<<< HEAD
-
-=======
 /**
- * 🔐 Estrategia JWT (Autenticación con token)
+ * 🔑 Estrategia JWT (autenticación mediante token Bearer)
  */
 const opts = {
   jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-  secretOrKey: process.env.JWT_SECRET
+  secretOrKey: process.env.JWT_SECRET,
 };
 
-passport.use(new JwtStrategy(opts, async (jwt_payload, done) => {
-  try {
-    console.log("🔍 Verificando JWT para usuario ID:", jwt_payload.id);
-    
-    const user = await User.findById(jwt_payload.id);
-    if (!user) {
-      console.warn("⚠️ Usuario no encontrado con ID:", jwt_payload.id);
-      return done(null, false);
-    }
+passport.use(
+  new JwtStrategy(opts, async (jwt_payload, done) => {
+    try {
+      console.log('🔍 Verificando JWT para usuario ID:', jwt_payload.id);
 
-    console.log("✅ Usuario autenticado con JWT:", user.username);
-    return done(null, user);
-  } catch (error) {
-    console.error("🚨 Error en la estrategia JWT:", error);
-    return done(error, false);
-  }
-}));
->>>>>>> 1f19f5b965fef7b855a945d670909bc315239476
+      const user = await User.findById(jwt_payload.id);
+      if (!user) {
+        console.warn('⚠️ Usuario no encontrado con ID:', jwt_payload.id);
+        return done(null, false);
+      }
+
+      console.log('✅ Usuario autenticado con JWT:', user.username);
+      return done(null, user);
+    } catch (error) {
+      console.error('🚨 Error en la estrategia JWT:', error);
+      return done(error, false);
+    }
+  })
+);
 
 module.exports = passport;
