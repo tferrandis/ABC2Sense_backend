@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-const User = require('../models/user');
-const passport = require('passport');
-const jwt = require('jsonwebtoken');
-=======
 const passport = require('passport');
 const User = require('../models/user');
 const jwt = require('jsonwebtoken');
@@ -10,7 +5,6 @@ const Sensor = require('../models/sensor');
 const Measurement = require('../models/measurement'); 
 const { sendMail } = require('../services/mailer');
 
->>>>>>> 1f19f5b965fef7b855a945d670909bc315239476
 
 exports.register = async (req, res) => {
   const { username, email, password } = req.body;
@@ -24,33 +18,15 @@ exports.register = async (req, res) => {
 };
 
 exports.login = (req, res, next) => {
-<<<<<<< HEAD
-  passport.authenticate('local', { session: false }, (err, user, info) => {
-    if (err) {
-=======
   console.log("🔍 Datos recibidos:", req.body); 
 
   passport.authenticate('local', { session: false }, (err, user, info) => {
     if (err) {
       console.error("🚨 Error en Passport:", err);
->>>>>>> 1f19f5b965fef7b855a945d670909bc315239476
       return res.status(500).json({ message: 'Server error', err });
     }
 
     if (!user) {
-<<<<<<< HEAD
-      return res.status(400).json({ message: 'Invalid credentials', info });
-    }
-
-    req.login(user, { session: false }, (err) => {
-      if (err) {
-        return res.status(500).send(err);
-      }
-    
-     let token= generateAndSaveToken(user);
-
-      return res.json({ user, token });
-=======
       console.warn("⚠️ Usuario no encontrado o credenciales incorrectas:", info);
       return res.status(400).json({ message: 'Credenciales inválidas', info });
     }
@@ -75,26 +51,10 @@ exports.login = (req, res, next) => {
         token,
         expiresAt: expirationDate.toISOString() 
       });
->>>>>>> 1f19f5b965fef7b855a945d670909bc315239476
     });
   })(req, res, next);
 };
 
-<<<<<<< HEAD
-async function generateAndSaveToken(user){
-      const token = await jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '8h' });
-
-        // Guardar el token en la colección Token
-        const tokenDocument = new Token({
-          userId: user._id,             // ID del usuario
-          token: token                  // El token generado
-        });
-
-        await tokenDocument.save();  
-
-        return token;
-}
-=======
 
 exports.deleteAccount = async (req, res) => {
   try {
@@ -132,4 +92,3 @@ exports.forgotPassword = async (req, res) => {
 
 
 
->>>>>>> 1f19f5b965fef7b855a945d670909bc315239476

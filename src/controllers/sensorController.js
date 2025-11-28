@@ -1,21 +1,18 @@
 // controllers/sensorController.js
 const Sensor = require('../models/sensor');
-<<<<<<< HEAD
-
-exports.createSensor = async (req, res) => {
-  const { sensorId, value, latitude, longitude } = req.body;
-  try {
-    const sensor = new Sensor({
-      user: req.user._id,
-      sensorId,
-      value,
-      coordinates: { latitude, longitude },
-    });
-    await sensor.save();
-    res.status(201).json(sensor);
-=======
 const SensorDefinition = require('../models/sensorDefinition');
 
+exports.createSensor = async (req, res) => {
+    const { sensorId, value, latitude, longitude } = req.body;
+    try {
+        const sensor = new Sensor({
+            user: req.user._id,
+            sensorId,
+            value,
+            coordinates: { latitude, longitude },
+        });
+        await sensor.save();
+        res.status(201).json(sensor);
 // Guardar medida para varios sensores
 exports.addMeasure = async (req, res) => {
   const { timestamp = new Date(), latitude = null, longitude = null, measurements } = req.body;
@@ -176,23 +173,18 @@ exports.createSensorDefinition = async (req, res) => {
     const def = new SensorDefinition({ sensorId, title, description, unit, measure });
     await def.save();
     res.status(201).json(def);
->>>>>>> 1f19f5b965fef7b855a945d670909bc315239476
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 };
 
-<<<<<<< HEAD
 exports.getSensorsByUser = async (req, res) => {
   const { userId } = req.params;
   try {
     const sensors = await Sensor.find({ user: userId });
-=======
-// Obtener definiciones de sensores
 exports.getSensorDefinitions = async (req, res) => {
   try {
     const sensors = await SensorDefinition.find({});
->>>>>>> 1f19f5b965fef7b855a945d670909bc315239476
     res.status(200).json(sensors);
   } catch (error) {
     res.status(500).json({ error: error.message });
