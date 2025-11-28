@@ -4,37 +4,38 @@ const multer = require("multer");
 const passport = require("passport");
 const firmwareController = require("../controllers/firmwareController");
 
-// Configuración de multer
+// Note: The controller already handles multer, so you may have duplicate multer config
+// But if you want to keep your simple config here, that's fine
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/firmware");
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + "-" + file.originalname);
-  },
+    destination: (req, file, cb) => {
+        cb(null, "uploads/firmware");
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + "-" + file.originalname);
+    },
 });
 const upload = multer({ storage });
 
-// Subir firmware
+// Subir firmware - use correct function name
 router.post(
-  "/firmware",
-  passport.authenticate("jwt", { session: false }),
-  upload.single("firmware"),
-  firmwareController.uploadFirmware
+    "/firmware",
+    passport.authenticate("jwt", { session: false }),
+    firmwareController.upload  // Changed from uploadFirmware
 );
 
-// Descargar firmware
+// Descargar firmware - use correct function name
 router.get(
-  "/firmware/:filename",
-  passport.authenticate("jwt", { session: false }),
-  firmwareController.downloadFirmware
+    "/firmware/:id",  // Note: controller uses :id, not :filename
+    passport.authenticate("jwt", { session: false }),
+    firmwareController.download  // Changed from downloadFirmware
 );
 
-// Listar firmwares
+// Listar firmwares - use correct function name
 router.get(
-  "/firmware",
-  passport.authenticate("jwt", { session: false }),
-  firmwareController.listFirmwares
+    "/firmware",
+    passport.authenticate("jwt", { session: false }),
+    firmwareController.list  // Changed from listFirmwares
 );
 
 module.exports = router;
