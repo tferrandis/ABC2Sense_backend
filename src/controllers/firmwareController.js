@@ -8,7 +8,7 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadPath = 'uploads/firmware';
     // Create directory if it doesn't exist
-    if (\!fs.existsSync(uploadPath)) {
+    if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
     }
     cb(null, uploadPath);
@@ -51,7 +51,7 @@ exports.upload = (req, res) => {
       });
     }
 
-    if (\!req.file) {
+    if (!req.file) {
       return res.status(400).json({ 
         success: false, 
         message: 'No file uploaded' 
@@ -61,7 +61,7 @@ exports.upload = (req, res) => {
     try {
       const { version, description } = req.body;
 
-      if (\!version || \!description) {
+      if (!version || !description) {
         // Delete uploaded file if validation fails
         fs.unlinkSync(req.file.path);
         return res.status(400).json({ 
@@ -140,7 +140,7 @@ exports.getById = async (req, res) => {
     const firmware = await Firmware.findById(req.params.id)
       .populate('uploadedBy', 'username email');
 
-    if (\!firmware) {
+    if (!firmware) {
       return res.status(404).json({ 
         success: false, 
         message: 'Firmware not found' 
@@ -165,7 +165,7 @@ exports.download = async (req, res) => {
   try {
     const firmware = await Firmware.findById(req.params.id);
 
-    if (\!firmware) {
+    if (!firmware) {
       return res.status(404).json({ 
         success: false, 
         message: 'Firmware not found' 
@@ -193,7 +193,7 @@ exports.getLatest = async (req, res) => {
     const firmware = await Firmware.findOne({ isActive: true })
       .sort({ createdAt: -1 });
 
-    if (\!firmware) {
+    if (!firmware) {
       return res.status(404).json({ 
         success: false, 
         message: 'No active firmware available' 
@@ -232,7 +232,7 @@ exports.setActive = async (req, res) => {
       { new: true }
     );
 
-    if (\!firmware) {
+    if (!firmware) {
       return res.status(404).json({ 
         success: false, 
         message: 'Firmware not found' 
@@ -258,7 +258,7 @@ exports.delete = async (req, res) => {
   try {
     const firmware = await Firmware.findById(req.params.id);
 
-    if (\!firmware) {
+    if (!firmware) {
       return res.status(404).json({ 
         success: false, 
         message: 'Firmware not found' 

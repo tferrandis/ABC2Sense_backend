@@ -6,7 +6,7 @@ const adminAuth = async (req, res, next) => {
     // Get token from header
     const authHeader = req.headers.authorization;
     
-    if (\!authHeader || \!authHeader.startsWith('Bearer ')) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ 
         success: false, 
         message: 'No token provided' 
@@ -20,7 +20,7 @@ const adminAuth = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Check if isAdmin flag is present
-    if (\!decoded.isAdmin) {
+    if (!decoded.isAdmin) {
       return res.status(403).json({ 
         success: false, 
         message: 'Access denied. Admin only.' 
@@ -30,7 +30,7 @@ const adminAuth = async (req, res, next) => {
     // Get admin from database
     const admin = await Admin.findById(decoded.id).select('-password');
     
-    if (\!admin) {
+    if (!admin) {
       return res.status(404).json({ 
         success: false, 
         message: 'Admin not found' 

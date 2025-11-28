@@ -8,7 +8,7 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     // Validate input
-    if (\!email || \!password) {
+    if (!email || !password) {
       return res.status(400).json({ 
         success: false, 
         message: 'Email and password are required' 
@@ -17,7 +17,7 @@ exports.login = async (req, res) => {
 
     // Find admin
     const admin = await Admin.findOne({ email });
-    if (\!admin) {
+    if (!admin) {
       return res.status(401).json({ 
         success: false, 
         message: 'Invalid credentials' 
@@ -26,7 +26,7 @@ exports.login = async (req, res) => {
 
     // Check password
     const isMatch = await admin.comparePassword(password);
-    if (\!isMatch) {
+    if (!isMatch) {
       return res.status(401).json({ 
         success: false, 
         message: 'Invalid credentials' 
@@ -91,7 +91,7 @@ exports.getUserById = async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
     
-    if (\!user) {
+    if (!user) {
       return res.status(404).json({ 
         success: false, 
         message: 'User not found' 
@@ -116,7 +116,7 @@ exports.deleteUser = async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
     
-    if (\!user) {
+    if (!user) {
       return res.status(404).json({ 
         success: false, 
         message: 'User not found' 
@@ -178,7 +178,7 @@ exports.getProfile = async (req, res) => {
 exports.createAdmin = async (req, res) => {
   try {
     // Check if requester is superadmin
-    if (req.admin.role \!== 'superadmin') {
+    if (req.admin.role !== 'superadmin') {
       return res.status(403).json({ 
         success: false, 
         message: 'Only superadmins can create new admins' 
@@ -188,7 +188,7 @@ exports.createAdmin = async (req, res) => {
     const { username, email, password, role } = req.body;
 
     // Validate input
-    if (\!username || \!email || \!password) {
+    if (!username || !email || !password) {
       return res.status(400).json({ 
         success: false, 
         message: 'Username, email and password are required' 
