@@ -5,11 +5,13 @@ const { v4: uuidv4 } = require('uuid');
 
 const UserSchema = new Schema({
   username: { type: String, required: true, unique: true },
-  email: { type: String, required: false, unique: true },
+  email: { type: String, required: true, unique: true },
   registrationDate: { type: Date, default: Date.now },
   uuid: { type: String, default: uuidv4 },
   password: { type: String, required: true },
+  role: { type: String, enum: ['user', 'admin'], default: 'user' } 
 });
+
 
 UserSchema.pre('save', async function (next) {
   if (this.isModified('password') || this.isNew) {
