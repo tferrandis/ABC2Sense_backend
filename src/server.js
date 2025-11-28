@@ -30,16 +30,18 @@ console.log("Connecting to mongodb...");
         // Auto-load other routes
         const routesPath = path.join(__dirname, 'routes');
         fs.readdirSync(routesPath).forEach((file) => {
-          if (file.endsWith('.js') && file \!== 'adminRoutes.js' && file \!== 'firmwareRoutes.js') {
-            const route = require(path.join(routesPath, file));
-            const routeName = file.replace('.js', ''');
-    
-            if (routeName === 'authRoutes') {
-              app.use('/api/auth/user', route);
-            } else {
-              app.use(`/api/${routeName.replace('Routes', ''').toLowerCase()}`, route);
+            if (file.endsWith('.js')) {
+                const route = require(path.join(routesPath, file));
+                // Se asume que el nombre del archivo sin la extensión es la ruta
+                const routeName = file.replace('.js', '');
+
+                // Si es authRoutes.js, registrar la ruta como /api/auth
+                if (routeName === 'authRoutes') {
+                    app.use('/api/auth', route);
+                } else {
+                    app.use(`/api/${routeName.replace('Routes', '').toLowerCase()}`, route);
+                }
             }
-          }
         });
 
         const PORT = process.env.PORT || 5000;
