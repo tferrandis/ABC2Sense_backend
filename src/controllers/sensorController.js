@@ -84,7 +84,7 @@ exports.getMeasures = async (req, res) => {
   if (lat && lng && radius) {
     const latRad = parseFloat(lat) * Math.PI / 180;
     const lngRad = parseFloat(lng) * Math.PI / 180;
-
+    console.log("a")
     haversineQuery = {
       $expr: {
         $lte: [
