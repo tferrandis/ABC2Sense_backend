@@ -57,8 +57,10 @@ http://localhost:5000/api/docs
 
 **Producción:**
 ```
-http://167.86.91.53/api/docs (si hay proxy configurado)
+http://167.86.91.53/api/docs
 ```
+
+> **Nota:** En producción, primero debes configurar Nginx. Ver sección "Configurar Nginx" más abajo.
 
 ### Regenerar la documentación
 
@@ -69,6 +71,33 @@ npm run apidoc
 ```
 
 La documentación se genera automáticamente a partir de las anotaciones en los controladores usando [apiDoc](https://apidocjs.com/).
+
+### Configurar Nginx (Producción)
+
+Para que la documentación sea accesible en producción a través de `http://167.86.91.53/api/docs`:
+
+**Opción A: Script automático (Recomendado)**
+```bash
+cd /root/sensor/ABC2Sense_backend
+sudo ./scripts/update-nginx.sh
+```
+
+**Opción B: Manual**
+```bash
+# 1. Hacer backup de la configuración actual
+sudo cp /etc/nginx/sites-available/catabo_front /etc/nginx/sites-available/catabo_front.backup
+
+# 2. Copiar la nueva configuración
+sudo cp nginx-catabo_front-updated.conf /etc/nginx/sites-available/catabo_front
+
+# 3. Verificar sintaxis
+sudo nginx -t
+
+# 4. Si todo está bien, recargar Nginx
+sudo systemctl reload nginx
+```
+
+El script hace backup automático de tu configuración actual antes de aplicar cambios.
 
 ## Estructura del Proyecto
 

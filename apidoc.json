@@ -1,0 +1,11 @@
+{
+  "name": "ABC2Sense API Documentation",
+  "version": "1.0.0",
+  "description": "API documentation for ABC2Sense IoT sensor management platform",
+  "title": "ABC2Sense API",
+  "url": "http://localhost:5000",
+  "header": {
+    "title": "Introduction",
+    "content": "<h1>Welcome to ABC2Sense API</h1>\n<p>This is the REST API documentation for the ABC2Sense IoT sensor management platform.</p>\n<h2>Authentication</h2>\n<p>Most endpoints require JWT authentication. Include the token in the Authorization header:</p>\n<pre><code>Authorization: Bearer &lt;your-token&gt;</code></pre>\n<h2>Base URL</h2>\n<p>All API requests should be made to: <code>http://localhost:5000/api</code></p>"
+  }
+}
