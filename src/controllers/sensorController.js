@@ -13,6 +13,11 @@ exports.createSensor = async (req, res) => {
         });
         await sensor.save();
         res.status(201).json(sensor);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+};
+
 // Guardar medida para varios sensores
 exports.addMeasure = async (req, res) => {
   const { timestamp = new Date(), latitude = null, longitude = null, measurements } = req.body;
@@ -182,6 +187,12 @@ exports.getSensorsByUser = async (req, res) => {
   const { userId } = req.params;
   try {
     const sensors = await Sensor.find({ user: userId });
+    res.status(200).json(sensors);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.getSensorDefinitions = async (req, res) => {
   try {
     const sensors = await SensorDefinition.find({});
