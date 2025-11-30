@@ -12,6 +12,9 @@ const app = express();
 app.use(express.json());
 app.use(passport.initialize());
 
+// Serve API documentation
+app.use('/api-docs', express.static(path.join(__dirname, '../docs')));
+
 // Import new routes
 const adminRoutes = require('./routes/adminRoutes');
 const firmwareRoutes = require('./routes/firmwareRoutes');
@@ -46,7 +49,10 @@ console.log("Connecting to mongodb...");
         });
 
         const PORT = process.env.PORT || 5000;
-        app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`Server running on port ${PORT}`);
+            console.log(`API Documentation available at: http://localhost:${PORT}/api-docs`);
+        });
     } catch (e) {
         console.log(e);
     }

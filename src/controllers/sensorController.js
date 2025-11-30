@@ -2,6 +2,39 @@
 const Sensor = require('../models/sensor');
 const SensorDefinition = require('../models/sensorDefinition');
 
+/**
+ * @api {post} /api/sensor/sensors Create Sensor
+ * @apiName CreateSensor
+ * @apiGroup Sensors
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Create a new sensor measurement
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiBody {Number} sensorId Sensor ID
+ * @apiBody {Number} value Measurement value
+ * @apiBody {Number} latitude GPS latitude coordinate
+ * @apiBody {Number} longitude GPS longitude coordinate
+ *
+ * @apiSuccess (201) {Object} sensor Created sensor object
+ *
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 201 Created
+ *     {
+ *       "_id": "507f1f77bcf86cd799439011",
+ *       "user": "507f1f77bcf86cd799439012",
+ *       "sensorId": 1,
+ *       "value": 25.5,
+ *       "coordinates": {
+ *         "latitude": 40.7128,
+ *         "longitude": -74.0060
+ *       }
+ *     }
+ *
+ * @apiError (400) {String} error Error message
+ * @apiError (401) Unauthorized User not authenticated
+ */
 exports.createSensor = async (req, res) => {
     const { sensorId, value, latitude, longitude } = req.body;
     try {
@@ -18,6 +51,38 @@ exports.createSensor = async (req, res) => {
     }
 };
 
+/**
+ * @api {post} /api/sensor/measure Add Multiple Measurements
+ * @apiName AddMeasure
+ * @apiGroup Sensors
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Add measurements for multiple sensors at once
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiBody {String} [timestamp] Measurement timestamp (defaults to current time)
+ * @apiBody {Number} [latitude] GPS latitude coordinate
+ * @apiBody {Number} [longitude] GPS longitude coordinate
+ * @apiBody {Object} measurements Object with sensorId as keys and values
+ *
+ * @apiParamExample {json} Request-Example:
+ *     {
+ *       "timestamp": "2024-01-01T12:00:00.000Z",
+ *       "latitude": 40.7128,
+ *       "longitude": -74.0060,
+ *       "measurements": {
+ *         "1": 25.5,
+ *         "2": 60.3,
+ *         "3": 1013.2
+ *       }
+ *     }
+ *
+ * @apiSuccess (201) {Object[]} sensors Array of saved sensor measurements
+ *
+ * @apiError (500) {String} error Error message
+ * @apiError (401) Unauthorized User not authenticated
+ */
 // Guardar medida para varios sensores
 exports.addMeasure = async (req, res) => {
   const { timestamp = new Date(), latitude = null, longitude = null, measurements } = req.body;
@@ -58,6 +123,53 @@ exports.addMeasure = async (req, res) => {
 
   const R = 6371; // Radio de la Tierra en km
 
+/**
+ * @api {get} /api/sensor/measure Get Measurements
+ * @apiName GetMeasures
+ * @apiGroup Sensors
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get paginated measurements with optional filtering by time range and location
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiQuery {String} [from] Start timestamp for filtering
+ * @apiQuery {String} [to] End timestamp for filtering
+ * @apiQuery {Number} [lat] Latitude for radius filtering
+ * @apiQuery {Number} [lng] Longitude for radius filtering
+ * @apiQuery {Number} [radius] Radius in km for location filtering
+ * @apiQuery {Number} [page=1] Page number
+ * @apiQuery {Number} [limit=20] Items per page
+ *
+ * @apiSuccess {Number} total Total number of measurements
+ * @apiSuccess {Number} page Current page
+ * @apiSuccess {Number} limit Items per page
+ * @apiSuccess {Object[]} measures Array of grouped measurements
+ *
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     {
+ *       "total": 100,
+ *       "page": 1,
+ *       "limit": 20,
+ *       "measures": [
+ *         {
+ *           "coordinates": {
+ *             "latitude": 40.7128,
+ *             "longitude": -74.0060
+ *           },
+ *           "timestamp": "2024-01-01T12:00:00.000Z",
+ *           "measurements": {
+ *             "1": 25.5,
+ *             "2": 60.3
+ *           }
+ *         }
+ *       ]
+ *     }
+ *
+ * @apiError (500) {String} error Error message
+ * @apiError (401) Unauthorized User not authenticated
+ */
 exports.getMeasures = async (req, res) => {
   const {
     from,
@@ -167,7 +279,38 @@ exports.getMeasures = async (req, res) => {
   }
 };
 
-
+/**
+ * @api {post} /api/sensor/sensor Create Sensor Definition
+ * @apiName CreateSensorDefinition
+ * @apiGroup Sensor Definitions
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Create a new sensor type definition
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiBody {Number} sensorId Unique sensor ID
+ * @apiBody {String} title Sensor title
+ * @apiBody {String} measure What the sensor measures
+ * @apiBody {String} unit Unit of measurement
+ * @apiBody {String} description Sensor description
+ *
+ * @apiSuccess (201) {Object} definition Created sensor definition
+ *
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 201 Created
+ *     {
+ *       "_id": "507f1f77bcf86cd799439011",
+ *       "sensorId": 1,
+ *       "title": "Temperature Sensor",
+ *       "measure": "Temperature",
+ *       "unit": "°C",
+ *       "description": "Measures ambient temperature"
+ *     }
+ *
+ * @apiError (400) {String} message Sensor ID already exists
+ * @apiError (401) Unauthorized User not authenticated
+ */
 // Crear definición de sensor
 exports.createSensorDefinition = async (req, res) => {
   const { sensorId, title, measure, unit, description } = req.body;
@@ -183,6 +326,23 @@ exports.createSensorDefinition = async (req, res) => {
   }
 };
 
+/**
+ * @api {get} /api/sensor/sensors/:userId Get Sensors by User
+ * @apiName GetSensorsByUser
+ * @apiGroup Sensors
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get all sensors for a specific user
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiParam {String} userId User's ID
+ *
+ * @apiSuccess {Object[]} sensors Array of sensor measurements
+ *
+ * @apiError (500) {String} error Error message
+ * @apiError (401) Unauthorized User not authenticated
+ */
 exports.getSensorsByUser = async (req, res) => {
   const { userId } = req.params;
   try {
@@ -193,6 +353,34 @@ exports.getSensorsByUser = async (req, res) => {
   }
 };
 
+/**
+ * @api {get} /api/sensor/sensor Get All Sensor Definitions
+ * @apiName GetSensorDefinitions
+ * @apiGroup Sensor Definitions
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get all sensor type definitions
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiSuccess {Object[]} sensors Array of sensor definitions
+ *
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     [
+ *       {
+ *         "_id": "507f1f77bcf86cd799439011",
+ *         "sensorId": 1,
+ *         "title": "Temperature Sensor",
+ *         "measure": "Temperature",
+ *         "unit": "°C",
+ *         "description": "Measures ambient temperature"
+ *       }
+ *     ]
+ *
+ * @apiError (500) {String} error Error message
+ * @apiError (401) Unauthorized User not authenticated
+ */
 exports.getSensorDefinitions = async (req, res) => {
   try {
     const sensors = await SensorDefinition.find({});

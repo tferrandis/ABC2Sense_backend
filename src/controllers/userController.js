@@ -1,6 +1,44 @@
 // controllers/userController.js
 const User = require('../models/user');
 
+/**
+ * @api {get} /api/user/users Get All Users
+ * @apiName GetAllUsers
+ * @apiGroup Users
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get paginated list of all users (Admin only)
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiQuery {Number} [page=1] Page number
+ * @apiQuery {Number} [limit=10] Items per page
+ *
+ * @apiSuccess {Number} totalUsers Total number of users
+ * @apiSuccess {Number} totalPages Total number of pages
+ * @apiSuccess {Number} currentPage Current page number
+ * @apiSuccess {Object[]} users Array of user objects
+ *
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     {
+ *       "totalUsers": 50,
+ *       "totalPages": 5,
+ *       "currentPage": 1,
+ *       "users": [
+ *         {
+ *           "_id": "507f1f77bcf86cd799439011",
+ *           "username": "johndoe",
+ *           "email": "john@example.com",
+ *           "registrationDate": "2024-01-01T00:00:00.000Z"
+ *         }
+ *       ]
+ *     }
+ *
+ * @apiError (401) Unauthorized User not authenticated
+ * @apiError (403) Forbidden User is not an admin
+ * @apiError (500) {String} message Error message
+ */
 exports.getAllUsers = async (req, res) => {
   try {
     let { page = 1, limit = 10 } = req.query;

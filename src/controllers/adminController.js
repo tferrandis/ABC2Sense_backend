@@ -2,6 +2,39 @@ const jwt = require('jsonwebtoken');
 const Admin = require('../models/admin');
 const User = require('../models/user');
 
+/**
+ * @api {post} /api/auth Admin Login
+ * @apiName AdminLogin
+ * @apiGroup Admin
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Authenticate admin and receive JWT token
+ *
+ * @apiBody {String} email Admin's email address
+ * @apiBody {String} password Admin's password
+ *
+ * @apiSuccess {Boolean} success Success status
+ * @apiSuccess {String} token JWT authentication token
+ * @apiSuccess {Object} admin Admin information
+ *
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     {
+ *       "success": true,
+ *       "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+ *       "admin": {
+ *         "id": "507f1f77bcf86cd799439011",
+ *         "username": "admin",
+ *         "email": "admin@example.com",
+ *         "role": "admin"
+ *       }
+ *     }
+ *
+ * @apiError (400) {Boolean} success False
+ * @apiError (400) {String} message Email and password are required
+ * @apiError (401) {Boolean} success False
+ * @apiError (401) {String} message Invalid credentials
+ */
 // Login admin
 exports.login = async (req, res) => {
   try {
@@ -68,6 +101,23 @@ exports.login = async (req, res) => {
   }
 };
 
+/**
+ * @api {get} /api/auth/users Get All Users (Admin)
+ * @apiName GetUsers
+ * @apiGroup Admin
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get all users (admin only)
+ *
+ * @apiHeader {String} Authorization Bearer JWT token (admin)
+ *
+ * @apiSuccess {Boolean} success Success status
+ * @apiSuccess {Number} count Number of users
+ * @apiSuccess {Object[]} users Array of user objects
+ *
+ * @apiError (500) {Boolean} success False
+ * @apiError (500) {String} message Error message
+ */
 // Get all users
 exports.getUsers = async (req, res) => {
   try {
@@ -86,6 +136,24 @@ exports.getUsers = async (req, res) => {
   }
 };
 
+/**
+ * @api {get} /api/auth/users/:id Get User by ID (Admin)
+ * @apiName GetUserById
+ * @apiGroup Admin
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get specific user by ID (admin only)
+ *
+ * @apiHeader {String} Authorization Bearer JWT token (admin)
+ *
+ * @apiParam {String} id User's ID
+ *
+ * @apiSuccess {Boolean} success Success status
+ * @apiSuccess {Object} user User object
+ *
+ * @apiError (404) {Boolean} success False
+ * @apiError (404) {String} message User not found
+ */
 // Get user by ID
 exports.getUserById = async (req, res) => {
   try {
@@ -111,6 +179,24 @@ exports.getUserById = async (req, res) => {
   }
 };
 
+/**
+ * @api {delete} /api/auth/users/:id Delete User (Admin)
+ * @apiName DeleteUser
+ * @apiGroup Admin
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Delete user by ID (admin only)
+ *
+ * @apiHeader {String} Authorization Bearer JWT token (admin)
+ *
+ * @apiParam {String} id User's ID
+ *
+ * @apiSuccess {Boolean} success Success status
+ * @apiSuccess {String} message Success message
+ *
+ * @apiError (404) {Boolean} success False
+ * @apiError (404) {String} message User not found
+ */
 // Delete user
 exports.deleteUser = async (req, res) => {
   try {
@@ -136,6 +222,24 @@ exports.deleteUser = async (req, res) => {
   }
 };
 
+/**
+ * @api {get} /api/auth/stats Get Statistics (Admin)
+ * @apiName GetStats
+ * @apiGroup Admin
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get system statistics (admin only)
+ *
+ * @apiHeader {String} Authorization Bearer JWT token (admin)
+ *
+ * @apiSuccess {Boolean} success Success status
+ * @apiSuccess {Object} stats Statistics object
+ * @apiSuccess {Number} stats.totalUsers Total number of users
+ * @apiSuccess {Number} stats.totalAdmins Total number of admins
+ *
+ * @apiError (500) {Boolean} success False
+ * @apiError (500) {String} message Error message
+ */
 // Get stats
 exports.getStats = async (req, res) => {
   try {
@@ -158,6 +262,22 @@ exports.getStats = async (req, res) => {
   }
 };
 
+/**
+ * @api {get} /api/auth/profile Get Admin Profile
+ * @apiName GetProfile
+ * @apiGroup Admin
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get authenticated admin profile
+ *
+ * @apiHeader {String} Authorization Bearer JWT token (admin)
+ *
+ * @apiSuccess {Boolean} success Success status
+ * @apiSuccess {Object} admin Admin object
+ *
+ * @apiError (500) {Boolean} success False
+ * @apiError (500) {String} message Error message
+ */
 // Get profile
 exports.getProfile = async (req, res) => {
   try {
@@ -174,6 +294,30 @@ exports.getProfile = async (req, res) => {
   }
 };
 
+/**
+ * @api {post} /api/auth/create Create Admin (Superadmin)
+ * @apiName CreateAdmin
+ * @apiGroup Admin
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Create a new admin account (superadmin only)
+ *
+ * @apiHeader {String} Authorization Bearer JWT token (superadmin)
+ *
+ * @apiBody {String} username Admin's username
+ * @apiBody {String} email Admin's email address
+ * @apiBody {String} password Admin's password
+ * @apiBody {String} [role=admin] Admin role (admin or superadmin)
+ *
+ * @apiSuccess (201) {Boolean} success Success status
+ * @apiSuccess (201) {String} message Success message
+ * @apiSuccess (201) {Object} admin Created admin object
+ *
+ * @apiError (400) {Boolean} success False
+ * @apiError (400) {String} message Validation error
+ * @apiError (403) {Boolean} success False
+ * @apiError (403) {String} message Only superadmins can create new admins
+ */
 // Create admin (superadmin only)
 exports.createAdmin = async (req, res) => {
   try {
