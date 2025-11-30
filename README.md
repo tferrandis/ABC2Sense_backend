@@ -168,12 +168,14 @@ El script hace backup automático de tu configuración actual antes de aplicar c
 - `POST /api/auth/login` - Login de usuarios
 - `POST /api/auth` - Login de administradores
 
-### Sensores
-- `GET /api/sensor/sensor` - Obtener definiciones de sensores
-- `POST /api/sensor/sensor` - Crear definición de sensor
-- `POST /api/sensor/sensors` - Crear sensor
-- `POST /api/sensor/measure` - Agregar mediciones
-- `GET /api/sensor/measure` - Obtener mediciones (con filtros)
+### Sensor Definitions
+- `GET /api/sensor/definitions` - Obtener definiciones de sensores
+- `POST /api/sensor/definitions` - Crear definición de sensor
+
+### Measurements
+- `POST /api/measurements` - Crear medición con múltiples sensores
+- `GET /api/measurements` - Obtener mediciones (con filtros de fecha, ubicación y paginación)
+- `DELETE /api/measurements/:id` - Eliminar una medición
 
 ### Administración
 - `GET /api/auth/users` - Listar usuarios
