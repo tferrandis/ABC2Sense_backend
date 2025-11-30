@@ -5,7 +5,9 @@ const { measurementValidator, validateResult } = require('../validators/measurem
 
 // Ruta para crear una medición con validadores
 router.post('/', measurementValidator, validateResult, measurementController.createMeasurement);
-router.get('/:user_id', measurementController.getMeasurementsByUserId);
+
+// Ruta para obtener mediciones del usuario autenticado
+router.get('/', measurementController.getMeasurementsByUserId);
 
 
 

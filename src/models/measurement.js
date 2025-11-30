@@ -1,7 +1,6 @@
 const { Schema, model } = require('mongoose');
 
 const MeasurementSchema = new Schema({
-  device_id: { type: Schema.Types.ObjectId, ref: 'Device', required: true },
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   timestamp: { type: Date, default: Date.now, required: true },
   location: {

@@ -2,11 +2,11 @@ const Measurement = require('../models/measurement');
 
 // Crear una nueva medición usando user_id del token
 exports.createMeasurement = async (req, res) => {
-  const { _id, timestamp, location, measurements } = req.body;
+  const { timestamp, location, measurements } = req.body;
 
   try {
     const measurement = new Measurement({
-      _id,
+      user_id: req.user._id, // Tomar user_id del token de autenticación
       timestamp,
       location,
       measurements,
