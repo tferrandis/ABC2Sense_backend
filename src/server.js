@@ -39,6 +39,7 @@ console.log("Connecting to mongodb...");
                 if (routeName === 'authRoutes') {
                     app.use('/api/auth', route);
                 } else {
+                    console.log(`Route /api/${routeName.replace('Routes', '').toLowerCase()}`);
                     app.use(`/api/${routeName.replace('Routes', '').toLowerCase()}`, route);
                 }
             }
