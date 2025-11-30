@@ -35,6 +35,28 @@ const upload = multer({
   }
 }).single('firmware');
 
+/**
+ * @api {post} /api/firmware/upload Upload Firmware (Admin)
+ * @apiName UploadFirmware
+ * @apiGroup Firmware
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Upload a new firmware file (admin only)
+ *
+ * @apiHeader {String} Authorization Bearer JWT token (admin)
+ * @apiHeader {String} Content-Type multipart/form-data
+ *
+ * @apiBody {File} firmware Firmware file (.bin, .hex, .elf, .ino)
+ * @apiBody {String} version Firmware version
+ * @apiBody {String} description Firmware description
+ *
+ * @apiSuccess (201) {Boolean} success Success status
+ * @apiSuccess (201) {String} message Success message
+ * @apiSuccess (201) {Object} firmware Created firmware object
+ *
+ * @apiError (400) {Boolean} success False
+ * @apiError (400) {String} message Validation error or file upload error
+ */
 // Upload firmware
 exports.upload = (req, res) => {
   upload(req, res, async (err) => {
@@ -113,6 +135,23 @@ exports.upload = (req, res) => {
   });
 };
 
+/**
+ * @api {get} /api/firmware List All Firmware (Admin)
+ * @apiName ListFirmware
+ * @apiGroup Firmware
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get list of all firmware files (admin only)
+ *
+ * @apiHeader {String} Authorization Bearer JWT token (admin)
+ *
+ * @apiSuccess {Boolean} success Success status
+ * @apiSuccess {Number} count Number of firmware files
+ * @apiSuccess {Object[]} firmwares Array of firmware objects
+ *
+ * @apiError (500) {Boolean} success False
+ * @apiError (500) {String} message Error message
+ */
 // List all firmwares
 exports.list = async (req, res) => {
   try {
@@ -134,6 +173,24 @@ exports.list = async (req, res) => {
   }
 };
 
+/**
+ * @api {get} /api/firmware/:id Get Firmware by ID (Admin)
+ * @apiName GetFirmwareById
+ * @apiGroup Firmware
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get specific firmware details by ID (admin only)
+ *
+ * @apiHeader {String} Authorization Bearer JWT token (admin)
+ *
+ * @apiParam {String} id Firmware ID
+ *
+ * @apiSuccess {Boolean} success Success status
+ * @apiSuccess {Object} firmware Firmware object
+ *
+ * @apiError (404) {Boolean} success False
+ * @apiError (404) {String} message Firmware not found
+ */
 // Get firmware by ID
 exports.getById = async (req, res) => {
   try {
@@ -160,6 +217,21 @@ exports.getById = async (req, res) => {
   }
 };
 
+/**
+ * @api {get} /api/firmware/download/:id Download Firmware
+ * @apiName DownloadFirmware
+ * @apiGroup Firmware
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Download firmware file (public for IoT devices)
+ *
+ * @apiParam {String} id Firmware ID
+ *
+ * @apiSuccess {File} file Firmware file download
+ *
+ * @apiError (404) {Boolean} success False
+ * @apiError (404) {String} message Firmware not found
+ */
 // Download firmware
 exports.download = async (req, res) => {
   try {
@@ -187,6 +259,25 @@ exports.download = async (req, res) => {
   }
 };
 
+/**
+ * @api {get} /api/firmware/latest Get Latest Firmware
+ * @apiName GetLatestFirmware
+ * @apiGroup Firmware
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get the latest active firmware (public for IoT devices)
+ *
+ * @apiSuccess {Boolean} success Success status
+ * @apiSuccess {Object} firmware Firmware information
+ * @apiSuccess {String} firmware.version Firmware version
+ * @apiSuccess {String} firmware.description Firmware description
+ * @apiSuccess {Number} firmware.size File size in bytes
+ * @apiSuccess {String} firmware.createdAt Upload timestamp
+ * @apiSuccess {String} firmware.downloadUrl Download URL
+ *
+ * @apiError (404) {Boolean} success False
+ * @apiError (404) {String} message No active firmware available
+ */
 // Get latest firmware
 exports.getLatest = async (req, res) => {
   try {
@@ -219,6 +310,25 @@ exports.getLatest = async (req, res) => {
   }
 };
 
+/**
+ * @api {put} /api/firmware/:id/activate Activate Firmware (Admin)
+ * @apiName ActivateFirmware
+ * @apiGroup Firmware
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Set firmware as active version (admin only)
+ *
+ * @apiHeader {String} Authorization Bearer JWT token (admin)
+ *
+ * @apiParam {String} id Firmware ID
+ *
+ * @apiSuccess {Boolean} success Success status
+ * @apiSuccess {String} message Success message
+ * @apiSuccess {Object} firmware Updated firmware object
+ *
+ * @apiError (404) {Boolean} success False
+ * @apiError (404) {String} message Firmware not found
+ */
 // Set firmware as active
 exports.setActive = async (req, res) => {
   try {
@@ -253,6 +363,24 @@ exports.setActive = async (req, res) => {
   }
 };
 
+/**
+ * @api {delete} /api/firmware/:id Delete Firmware (Admin)
+ * @apiName DeleteFirmware
+ * @apiGroup Firmware
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Delete firmware file and database record (admin only)
+ *
+ * @apiHeader {String} Authorization Bearer JWT token (admin)
+ *
+ * @apiParam {String} id Firmware ID
+ *
+ * @apiSuccess {Boolean} success Success status
+ * @apiSuccess {String} message Success message
+ *
+ * @apiError (404) {Boolean} success False
+ * @apiError (404) {String} message Firmware not found
+ */
 // Delete firmware
 exports.delete = async (req, res) => {
   try {

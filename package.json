@@ -5,7 +5,8 @@
   "main": "src/app.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon src/server.js",
+    "apidoc": "apidoc -i src/controllers -o docs"
   },
   "keywords": [],
   "author": "",
@@ -25,6 +26,7 @@
     "uuid": "^10.0.0"
   },
   "devDependencies": {
+    "apidoc": "^1.2.0",
     "nodemon": "^3.1.4"
   }
 }

@@ -2,10 +2,32 @@ const passport = require('passport');
 const User = require('../models/user');
 const jwt = require('jsonwebtoken');
 const Sensor = require('../models/sensor');
-const Measurement = require('../models/measurement'); 
+const Measurement = require('../models/measurement');
 const { sendMail } = require('../services/mailer');
 
-
+/**
+ * @api {post} /api/auth/register Register User
+ * @apiName RegisterUser
+ * @apiGroup Authentication
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Register a new user account
+ *
+ * @apiBody {String} username User's username
+ * @apiBody {String} email User's email address
+ * @apiBody {String} password User's password
+ *
+ * @apiSuccess {String} message Success message
+ *
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 201 Created
+ *     {
+ *       "message": "User registered successfully"
+ *     }
+ *
+ * @apiError (500) {String} message Error message
+ * @apiError (500) {Object} error Error details
+ */
 exports.register = async (req, res) => {
   const { username, email, password } = req.body;
   try {
@@ -17,6 +39,36 @@ exports.register = async (req, res) => {
   }
 };
 
+/**
+ * @api {post} /api/auth/login User Login
+ * @apiName LoginUser
+ * @apiGroup Authentication
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Authenticate user and receive JWT token
+ *
+ * @apiBody {String} email User's email address
+ * @apiBody {String} password User's password
+ *
+ * @apiSuccess {Object} user User information
+ * @apiSuccess {String} token JWT authentication token
+ * @apiSuccess {String} expiresAt Token expiration timestamp
+ *
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     {
+ *       "user": {
+ *         "_id": "507f1f77bcf86cd799439011",
+ *         "username": "johndoe",
+ *         "email": "john@example.com"
+ *       },
+ *       "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+ *       "expiresAt": "2024-01-01T12:00:00.000Z"
+ *     }
+ *
+ * @apiError (400) {String} message Invalid credentials message
+ * @apiError (500) {String} message Server error message
+ */
 exports.login = (req, res, next) => {
   console.log("🔍 Datos recibidos:", req.body); 
 

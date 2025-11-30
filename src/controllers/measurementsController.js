@@ -1,5 +1,24 @@
 const Measurement = require('../models/measurement');
 
+/**
+ * @api {post} /api/measurements Create Measurement
+ * @apiName CreateMeasurement
+ * @apiGroup Measurements
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Create a new measurement record
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiBody {String} timestamp Measurement timestamp
+ * @apiBody {Object} location Location object with latitude and longitude
+ * @apiBody {Object} measurements Object with measurement data
+ *
+ * @apiSuccess (201) {Object} measurement Created measurement object
+ *
+ * @apiError (400) {String} error Validation error
+ * @apiError (401) Unauthorized User not authenticated
+ */
 // Crear una nueva medición usando user_id del token
 exports.createMeasurement = async (req, res) => {
   const { timestamp, location, measurements } = req.body;
@@ -19,6 +38,22 @@ exports.createMeasurement = async (req, res) => {
   }
 };
 
+/**
+ * @api {get} /api/measurements Get User Measurements
+ * @apiName GetMeasurementsByUserId
+ * @apiGroup Measurements
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get all measurements for the authenticated user
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiSuccess {Object[]} measurements Array of measurement objects
+ *
+ * @apiError (404) {String} message No measurements found
+ * @apiError (500) {String} error Error message
+ * @apiError (401) Unauthorized User not authenticated
+ */
 // Obtener todas las mediciones del usuario autenticado
 exports.getMeasurementsByUserId = async (req, res) => {
   try {
