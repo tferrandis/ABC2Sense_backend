@@ -49,8 +49,15 @@ El servidor estará corriendo en `http://localhost:5000` (o en el puerto configu
 
 Una vez que el servidor esté corriendo, puedes acceder a la documentación completa de la API en:
 
+**Desarrollo local:**
 ```
 http://localhost:5000/api-docs
+http://localhost:5000/api/docs
+```
+
+**Producción:**
+```
+http://167.86.91.53/api/docs (si hay proxy configurado)
 ```
 
 ### Regenerar la documentación
