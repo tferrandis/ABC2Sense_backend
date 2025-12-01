@@ -201,6 +201,69 @@ exports.getMeasurements = async (req, res) => {
 };
 
 /**
+ * @api {get} /api/measurements/:id Get Measurement by ID
+ * @apiName GetMeasurementById
+ * @apiGroup Measurements
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get a specific measurement by ID
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiParam {String} id Measurement ID
+ *
+ * @apiSuccess {Object} measurement Measurement object
+ * @apiSuccess {String} measurement._id Measurement ID
+ * @apiSuccess {String} measurement.user_id User ID
+ * @apiSuccess {String} measurement.timestamp Measurement timestamp
+ * @apiSuccess {Object} measurement.location Location object
+ * @apiSuccess {Number} measurement.location.lat Latitude
+ * @apiSuccess {Number} measurement.location.long Longitude
+ * @apiSuccess {Object[]} measurement.measurements Array of sensor measurements
+ * @apiSuccess {Mixed} measurement.measurements.sensor_id Sensor ID
+ * @apiSuccess {Mixed} measurement.measurements.value Measurement value
+ *
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     {
+ *       "_id": "507f1f77bcf86cd799439011",
+ *       "user_id": "507f1f77bcf86cd799439012",
+ *       "timestamp": "2024-01-01T12:00:00.000Z",
+ *       "location": {
+ *         "lat": 40.7128,
+ *         "long": -74.0060
+ *       },
+ *       "measurements": [
+ *         { "sensor_id": 1, "value": 25.5 },
+ *         { "sensor_id": 2, "value": 60.3 }
+ *       ]
+ *     }
+ *
+ * @apiError (404) {String} message Measurement not found
+ * @apiError (403) {String} message Not authorized to access this measurement
+ * @apiError (500) {String} error Error message
+ * @apiError (401) Unauthorized User not authenticated
+ */
+exports.getMeasurementById = async (req, res) => {
+  try {
+    const measurement = await Measurement.findById(req.params.id);
+
+    if (!measurement) {
+      return res.status(404).json({ message: 'Medición no encontrada' });
+    }
+
+    // Verificar que el usuario sea el dueño de la medición
+    if (measurement.user_id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'No autorizado para acceder a esta medición' });
+    }
+
+    res.status(200).json(measurement);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
  * @api {delete} /api/measurements/:id Delete Measurement
  * @apiName DeleteMeasurement
  * @apiGroup Measurements

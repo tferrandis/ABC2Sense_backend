@@ -10,6 +10,9 @@ router.post('/', passport.authenticate('jwt', { session: false }), measurementVa
 // Obtener mediciones del usuario autenticado con filtros opcionales
 router.get('/', passport.authenticate('jwt', { session: false }), measurementController.getMeasurements);
 
+// Obtener una medición específica por ID
+router.get('/:id', passport.authenticate('jwt', { session: false }), measurementController.getMeasurementById);
+
 // Eliminar una medición específica
 router.delete('/:id', passport.authenticate('jwt', { session: false }), measurementController.deleteMeasurement);
 
