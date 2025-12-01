@@ -9,7 +9,7 @@ const MeasurementSchema = new Schema({
   },
   measurements: [
     {
-      sensor_id: { type: Number, required: true },
+      sensor_id: { type: Schema.Types.Mixed, required: true }, // Puede ser Number o String
       value: { type: Schema.Types.Mixed, required: true }, // Puede ser String o Number
     }
   ]

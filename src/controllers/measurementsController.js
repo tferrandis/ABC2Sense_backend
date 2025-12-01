@@ -1,34 +1,53 @@
 const Measurement = require('../models/measurement');
 
+const R = 6371; // Radio de la Tierra en km
+
 /**
  * @api {post} /api/measurements Create Measurement
  * @apiName CreateMeasurement
  * @apiGroup Measurements
  * @apiVersion 1.0.0
  *
- * @apiDescription Create a new measurement record
+ * @apiDescription Create a new measurement record with multiple sensors
  *
  * @apiHeader {String} Authorization Bearer JWT token
  *
- * @apiBody {String} timestamp Measurement timestamp
- * @apiBody {Object} location Location object with latitude and longitude
- * @apiBody {Object} measurements Object with measurement data
+ * @apiBody {String} [timestamp] Measurement timestamp (defaults to current time)
+ * @apiBody {Object} [location] Location object with lat and long
+ * @apiBody {Number} [location.lat] Latitude coordinate
+ * @apiBody {Number} [location.long] Longitude coordinate
+ * @apiBody {Object[]} measurements Array of sensor measurements
+ * @apiBody {Number} measurements.sensor_id Sensor ID
+ * @apiBody {Mixed} measurements.value Measurement value (can be Number or String)
+ *
+ * @apiParamExample {json} Request-Example:
+ *     {
+ *       "timestamp": "2024-01-01T12:00:00.000Z",
+ *       "location": {
+ *         "lat": 40.7128,
+ *         "long": -74.0060
+ *       },
+ *       "measurements": [
+ *         { "sensor_id": 1, "value": 25.5 },
+ *         { "sensor_id": 2, "value": 60.3 },
+ *         { "sensor_id": 3, "value": 1013.2 }
+ *       ]
+ *     }
  *
  * @apiSuccess (201) {Object} measurement Created measurement object
  *
  * @apiError (400) {String} error Validation error
  * @apiError (401) Unauthorized User not authenticated
  */
-// Crear una nueva medición usando user_id del token
 exports.createMeasurement = async (req, res) => {
-  const { timestamp, location, measurements } = req.body;
+  const { timestamp = new Date(), location, measurements } = req.body;
 
   try {
     const measurement = new Measurement({
-      user_id: req.user._id, // Tomar user_id del token de autenticación
-      timestamp,
-      location,
-      measurements,
+      user_id: req.user._id,
+      timestamp: new Date(timestamp),
+      location: location || {},
+      measurements: measurements || [],
     });
 
     await measurement.save();
@@ -39,32 +58,245 @@ exports.createMeasurement = async (req, res) => {
 };
 
 /**
- * @api {get} /api/measurements Get User Measurements
- * @apiName GetMeasurementsByUserId
+ * @api {get} /api/measurements Get Measurements
+ * @apiName GetMeasurements
  * @apiGroup Measurements
  * @apiVersion 1.0.0
  *
- * @apiDescription Get all measurements for the authenticated user
+ * @apiDescription Get paginated measurements with optional filtering by time range and location
  *
  * @apiHeader {String} Authorization Bearer JWT token
  *
+ * @apiQuery {String} [from] Start timestamp for filtering (ISO 8601 format)
+ * @apiQuery {String} [to] End timestamp for filtering (ISO 8601 format)
+ * @apiQuery {Number} [lat] Latitude for radius filtering
+ * @apiQuery {Number} [lng] Longitude for radius filtering
+ * @apiQuery {Number} [radius] Radius in km for location filtering
+ * @apiQuery {Number} [page=1] Page number
+ * @apiQuery {Number} [limit=20] Items per page
+ *
+ * @apiSuccess {Number} total Total number of measurements
+ * @apiSuccess {Number} page Current page
+ * @apiSuccess {Number} limit Items per page
  * @apiSuccess {Object[]} measurements Array of measurement objects
  *
- * @apiError (404) {String} message No measurements found
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     {
+ *       "total": 100,
+ *       "page": 1,
+ *       "limit": 20,
+ *       "measurements": [
+ *         {
+ *           "_id": "507f1f77bcf86cd799439011",
+ *           "user_id": "507f1f77bcf86cd799439012",
+ *           "timestamp": "2024-01-01T12:00:00.000Z",
+ *           "location": {
+ *             "lat": 40.7128,
+ *             "long": -74.0060
+ *           },
+ *           "measurements": [
+ *             { "sensor_id": 1, "value": 25.5 },
+ *             { "sensor_id": 2, "value": 60.3 }
+ *           ]
+ *         }
+ *       ]
+ *     }
+ *
  * @apiError (500) {String} error Error message
  * @apiError (401) Unauthorized User not authenticated
  */
-// Obtener todas las mediciones del usuario autenticado
-exports.getMeasurementsByUserId = async (req, res) => {
-  try {
-    const userId = req.user._id; 
-    const measurements = await Measurement.find({ user_id: userId });
+exports.getMeasurements = async (req, res) => {
+  const {
+    from,
+    to,
+    lat,
+    lng,
+    radius,
+    page = 1,
+    limit = 20
+  } = req.query;
 
-    if (!measurements.length) {
-      return res.status(404).json({ message: 'No se encontraron mediciones para este usuario' });
+  const filter = {
+    user_id: req.user._id
+  };
+
+  // Filtro por rango de fechas
+  if (from || to) {
+    filter.timestamp = {};
+    if (from) filter.timestamp.$gte = new Date(from);
+    if (to) filter.timestamp.$lte = new Date(to);
+  }
+
+  // Filtro geoespacial usando fórmula de Haversine
+  let haversineQuery = {};
+  if (lat && lng && radius) {
+    const latRad = parseFloat(lat) * Math.PI / 180;
+    const lngRad = parseFloat(lng) * Math.PI / 180;
+
+    haversineQuery = {
+      $expr: {
+        $lte: [
+          {
+            $multiply: [
+              R,
+              {
+                $acos: {
+                  $add: [
+                    {
+                      $multiply: [
+                        { $sin: { $multiply: [{ $divide: [Math.PI, 180] }, "$location.lat"] } },
+                        Math.sin(latRad)
+                      ]
+                    },
+                    {
+                      $multiply: [
+                        { $cos: { $multiply: [{ $divide: [Math.PI, 180] }, "$location.lat"] } },
+                        Math.cos(latRad),
+                        {
+                          $cos: {
+                            $subtract: [
+                              { $multiply: [{ $divide: [Math.PI, 180] }, "$location.long"] },
+                              lngRad
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          parseFloat(radius)
+        ]
+      }
+    };
+  }
+
+  try {
+    const query = Object.keys(haversineQuery).length > 0
+      ? { $and: [filter, haversineQuery] }
+      : filter;
+
+    // Contar total de documentos
+    const total = await Measurement.countDocuments(query);
+
+    // Obtener mediciones paginadas
+    const measurements = await Measurement.find(query)
+      .sort({ timestamp: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    res.status(200).json({
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / limit),
+      measurements
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * @api {get} /api/measurements/:id Get Measurement by ID
+ * @apiName GetMeasurementById
+ * @apiGroup Measurements
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get a specific measurement by ID
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiParam {String} id Measurement ID
+ *
+ * @apiSuccess {Object} measurement Measurement object
+ * @apiSuccess {String} measurement._id Measurement ID
+ * @apiSuccess {String} measurement.user_id User ID
+ * @apiSuccess {String} measurement.timestamp Measurement timestamp
+ * @apiSuccess {Object} measurement.location Location object
+ * @apiSuccess {Number} measurement.location.lat Latitude
+ * @apiSuccess {Number} measurement.location.long Longitude
+ * @apiSuccess {Object[]} measurement.measurements Array of sensor measurements
+ * @apiSuccess {Mixed} measurement.measurements.sensor_id Sensor ID
+ * @apiSuccess {Mixed} measurement.measurements.value Measurement value
+ *
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     {
+ *       "_id": "507f1f77bcf86cd799439011",
+ *       "user_id": "507f1f77bcf86cd799439012",
+ *       "timestamp": "2024-01-01T12:00:00.000Z",
+ *       "location": {
+ *         "lat": 40.7128,
+ *         "long": -74.0060
+ *       },
+ *       "measurements": [
+ *         { "sensor_id": 1, "value": 25.5 },
+ *         { "sensor_id": 2, "value": 60.3 }
+ *       ]
+ *     }
+ *
+ * @apiError (404) {String} message Measurement not found
+ * @apiError (403) {String} message Not authorized to access this measurement
+ * @apiError (500) {String} error Error message
+ * @apiError (401) Unauthorized User not authenticated
+ */
+exports.getMeasurementById = async (req, res) => {
+  try {
+    const measurement = await Measurement.findById(req.params.id);
+
+    if (!measurement) {
+      return res.status(404).json({ message: 'Medición no encontrada' });
     }
 
-    res.status(200).json(measurements);
+    // Verificar que el usuario sea el dueño de la medición
+    if (measurement.user_id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'No autorizado para acceder a esta medición' });
+    }
+
+    res.status(200).json(measurement);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * @api {delete} /api/measurements/:id Delete Measurement
+ * @apiName DeleteMeasurement
+ * @apiGroup Measurements
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Delete a specific measurement by ID
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiParam {String} id Measurement ID
+ *
+ * @apiSuccess {String} message Success message
+ *
+ * @apiError (404) {String} message Measurement not found
+ * @apiError (403) {String} message Not authorized to delete this measurement
+ * @apiError (500) {String} error Error message
+ * @apiError (401) Unauthorized User not authenticated
+ */
+exports.deleteMeasurement = async (req, res) => {
+  try {
+    const measurement = await Measurement.findById(req.params.id);
+
+    if (!measurement) {
+      return res.status(404).json({ message: 'Medición no encontrada' });
+    }
+
+    // Verificar que el usuario sea el dueño de la medición
+    if (measurement.user_id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'No autorizado para eliminar esta medición' });
+    }
+
+    await Measurement.findByIdAndDelete(req.params.id);
+    res.status(200).json({ message: 'Medición eliminada correctamente' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
