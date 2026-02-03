@@ -12,16 +12,20 @@ const R = 6371; // Radio de la Tierra en km
  *
  * @apiHeader {String} Authorization Bearer JWT token
  *
- * @apiBody {String} [timestamp] Measurement timestamp (defaults to current time)
+ * @apiBody {String} [user_id] User ID (admin only - ignored for regular users)
+ * @apiBody {String} [device_id] Device identifier (optional)
+ * @apiBody {String} [timestamp] Measurement timestamp ISO8601 (defaults to server time)
  * @apiBody {Object} [location] Location object with lat and long
- * @apiBody {Number} [location.lat] Latitude coordinate
- * @apiBody {Number} [location.long] Longitude coordinate
+ * @apiBody {Number} [location.lat] Latitude coordinate (can be null)
+ * @apiBody {Number} [location.long] Longitude coordinate (can be null)
  * @apiBody {Object[]} measurements Array of sensor measurements
- * @apiBody {Number} measurements.sensor_id Sensor ID
- * @apiBody {Mixed} measurements.value Measurement value (can be Number or String)
+ * @apiBody {Number|String} measurements.sensor_id Sensor ID
+ * @apiBody {Number} measurements.value Measurement value (must be numeric)
+ * @apiBody {String} [notes] Optional notes or comments
  *
  * @apiParamExample {json} Request-Example:
  *     {
+ *       "device_id": "ESP32-001",
  *       "timestamp": "2024-01-01T12:00:00.000Z",
  *       "location": {
  *         "lat": 40.7128,
@@ -29,25 +33,48 @@ const R = 6371; // Radio de la Tierra en km
  *       },
  *       "measurements": [
  *         { "sensor_id": 1, "value": 25.5 },
- *         { "sensor_id": 2, "value": 60.3 },
- *         { "sensor_id": 3, "value": 1013.2 }
- *       ]
+ *         { "sensor_id": 2, "value": 60.3 }
+ *       ],
+ *       "notes": "Morning reading"
  *     }
  *
  * @apiSuccess (201) {Object} measurement Created measurement object
  *
- * @apiError (400) {String} error Validation error
+ * @apiError (400) {String} error Validation error (e.g., non-numeric values)
  * @apiError (401) Unauthorized User not authenticated
  */
 exports.createMeasurement = async (req, res) => {
-  const { timestamp = new Date(), location, measurements } = req.body;
+  const { user_id, device_id, timestamp, location, measurements, notes } = req.body;
 
   try {
+    // Validate measurements have numeric values
+    if (measurements && Array.isArray(measurements)) {
+      for (const m of measurements) {
+        if (typeof m.value !== 'number' || isNaN(m.value)) {
+          return res.status(400).json({
+            error: `Invalid measurement value: ${m.value}. All values must be numeric.`
+          });
+        }
+        if (m.sensor_id === undefined || m.sensor_id === null) {
+          return res.status(400).json({
+            error: 'Each measurement must have a sensor_id'
+          });
+        }
+      }
+    }
+
+    // Determine user_id: admin can specify, regular users use their own
+    const effectiveUserId = (req.user.role === 'admin' && user_id)
+      ? user_id
+      : req.user._id;
+
     const measurement = new Measurement({
-      user_id: req.user._id,
-      timestamp: new Date(timestamp),
-      location: location || {},
+      user_id: effectiveUserId,
+      device_id: device_id || null,
+      timestamp: timestamp ? new Date(timestamp) : new Date(),
+      location: location || { lat: null, long: null },
       measurements: measurements || [],
+      notes: notes || null,
     });
 
     await measurement.save();
