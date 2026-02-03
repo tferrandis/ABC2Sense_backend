@@ -9,7 +9,8 @@ const UserSchema = new Schema({
   registrationDate: { type: Date, default: Date.now },
   uuid: { type: String, default: uuidv4 },
   password: { type: String, required: true },
-  role: { type: String, enum: ['user', 'admin'], default: 'user' } 
+  role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  emailVerified: { type: Boolean, default: false }
 });
 
 
