@@ -7,6 +7,9 @@ const { measurementValidator, validateResult } = require('../validators/measurem
 // Crear una medición con validadores
 router.post('/', passport.authenticate('jwt', { session: false }), measurementValidator, validateResult, measurementController.createMeasurement);
 
+// Crear múltiples mediciones en batch (para sync offline)
+router.post('/batch', passport.authenticate('jwt', { session: false }), measurementController.createBatchMeasurements);
+
 // Obtener mediciones del usuario autenticado con filtros opcionales
 router.get('/', passport.authenticate('jwt', { session: false }), measurementController.getMeasurements);
 
