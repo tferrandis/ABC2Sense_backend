@@ -328,3 +328,139 @@ exports.deleteMeasurement = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+/**
+ * @api {post} /api/measurements/batch Create Batch Measurements
+ * @apiName CreateBatchMeasurements
+ * @apiGroup Measurements
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Create multiple measurements in a single request (for offline sync)
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiBody {Object[]} measurements Array of measurement objects (max 20)
+ * @apiBody {String} [measurements.user_id] User ID (admin only)
+ * @apiBody {String} [measurements.device_id] Device identifier
+ * @apiBody {String} [measurements.timestamp] ISO8601 timestamp
+ * @apiBody {Object} [measurements.location] Location {lat, long}
+ * @apiBody {Object[]} measurements.measurements Sensor readings array
+ * @apiBody {String} [measurements.notes] Optional notes
+ *
+ * @apiParamExample {json} Request-Example:
+ *     {
+ *       "measurements": [
+ *         {
+ *           "device_id": "ESP32-001",
+ *           "timestamp": "2024-01-01T12:00:00.000Z",
+ *           "location": { "lat": 40.71, "long": -74.00 },
+ *           "measurements": [{ "sensor_id": 1, "value": 25.5 }]
+ *         },
+ *         {
+ *           "device_id": "ESP32-001",
+ *           "timestamp": "2024-01-01T12:05:00.000Z",
+ *           "measurements": [{ "sensor_id": 1, "value": 26.0 }]
+ *         }
+ *       ]
+ *     }
+ *
+ * @apiSuccess (201) {Object[]} results Array of results per measurement
+ * @apiSuccess (201) {Number} results.index Index in original array
+ * @apiSuccess (201) {Boolean} results.success Whether insert succeeded
+ * @apiSuccess (201) {String} [results.id] Created measurement ID (if success)
+ * @apiSuccess (201) {String} [results.error] Error message (if failed)
+ *
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 201 Created
+ *     {
+ *       "results": [
+ *         { "index": 0, "success": true, "id": "507f1f77bcf86cd799439011" },
+ *         { "index": 1, "success": true, "id": "507f1f77bcf86cd799439012" }
+ *       ],
+ *       "summary": { "total": 2, "success": 2, "failed": 0 }
+ *     }
+ *
+ * @apiError (400) {String} error Batch limit exceeded or invalid format
+ * @apiError (401) Unauthorized User not authenticated
+ */
+exports.createBatchMeasurements = async (req, res) => {
+  const { measurements } = req.body;
+  const BATCH_LIMIT = 20;
+
+  // Validate input
+  if (!measurements || !Array.isArray(measurements)) {
+    return res.status(400).json({ error: 'measurements must be an array' });
+  }
+
+  if (measurements.length > BATCH_LIMIT) {
+    return res.status(400).json({
+      error: `Batch limit exceeded. Maximum ${BATCH_LIMIT} measurements per request.`
+    });
+  }
+
+  if (measurements.length === 0) {
+    return res.status(400).json({ error: 'measurements array cannot be empty' });
+  }
+
+  const results = [];
+  let successCount = 0;
+  let failedCount = 0;
+
+  for (let i = 0; i < measurements.length; i++) {
+    const item = measurements[i];
+
+    try {
+      // Validate measurement values
+      if (item.measurements && Array.isArray(item.measurements)) {
+        for (const m of item.measurements) {
+          if (typeof m.value !== 'number' || isNaN(m.value)) {
+            throw new Error(`Invalid measurement value: ${m.value}. Must be numeric.`);
+          }
+          if (m.sensor_id === undefined || m.sensor_id === null) {
+            throw new Error('Each measurement must have a sensor_id');
+          }
+        }
+      }
+
+      // Determine user_id
+      const effectiveUserId = (req.user.role === 'admin' && item.user_id)
+        ? item.user_id
+        : req.user._id;
+
+      const measurement = new Measurement({
+        user_id: effectiveUserId,
+        device_id: item.device_id || null,
+        timestamp: item.timestamp ? new Date(item.timestamp) : new Date(),
+        location: item.location || { lat: null, long: null },
+        measurements: item.measurements || [],
+        notes: item.notes || null,
+      });
+
+      await measurement.save();
+
+      results.push({
+        index: i,
+        success: true,
+        id: measurement._id.toString()
+      });
+      successCount++;
+
+    } catch (error) {
+      results.push({
+        index: i,
+        success: false,
+        error: error.message
+      });
+      failedCount++;
+    }
+  }
+
+  res.status(201).json({
+    results,
+    summary: {
+      total: measurements.length,
+      success: successCount,
+      failed: failedCount
+    }
+  });
+};
