@@ -90,7 +90,7 @@ exports.createMeasurement = async (req, res) => {
  * @apiGroup Measurements
  * @apiVersion 1.0.0
  *
- * @apiDescription Get paginated measurements with optional filtering by time range and location
+ * @apiDescription Get paginated measurements with optional filtering by time range, location, sensor, and user
  *
  * @apiHeader {String} Authorization Bearer JWT token
  *
@@ -99,6 +99,9 @@ exports.createMeasurement = async (req, res) => {
  * @apiQuery {Number} [lat] Latitude for radius filtering
  * @apiQuery {Number} [lng] Longitude for radius filtering
  * @apiQuery {Number} [radius] Radius in km for location filtering
+ * @apiQuery {Number} [radius_m] Radius in meters for location filtering (alternative to radius)
+ * @apiQuery {String|Number} [sensorId] Filter by specific sensor ID
+ * @apiQuery {String} [userId] Filter by user ID (admin only)
  * @apiQuery {Number} [page=1] Page number
  * @apiQuery {Number} [limit=20] Items per page
  *
@@ -140,13 +143,30 @@ exports.getMeasurements = async (req, res) => {
     lat,
     lng,
     radius,
+    radius_m,
+    sensorId,
+    userId,
     page = 1,
     limit = 20
   } = req.query;
 
+  // Determine user_id filter: admin can specify userId, others use their own
+  const effectiveUserId = (req.user.role === 'admin' && userId)
+    ? userId
+    : req.user._id;
+
   const filter = {
-    user_id: req.user._id
+    user_id: effectiveUserId
   };
+
+  // Filter by sensorId if provided
+  if (sensorId) {
+    filter.measurements = {
+      $elemMatch: {
+        sensor_id: isNaN(sensorId) ? sensorId : parseInt(sensorId)
+      }
+    };
+  }
 
   // Filtro por rango de fechas
   if (from || to) {
@@ -157,7 +177,10 @@ exports.getMeasurements = async (req, res) => {
 
   // Filtro geoespacial usando fórmula de Haversine
   let haversineQuery = {};
-  if (lat && lng && radius) {
+  // Support both radius (km) and radius_m (meters)
+  const radiusKm = radius ? parseFloat(radius) : (radius_m ? parseFloat(radius_m) / 1000 : null);
+
+  if (lat && lng && radiusKm) {
     const latRad = parseFloat(lat) * Math.PI / 180;
     const lngRad = parseFloat(lng) * Math.PI / 180;
 
@@ -195,7 +218,7 @@ exports.getMeasurements = async (req, res) => {
               }
             ]
           },
-          parseFloat(radius)
+          radiusKm
         ]
       }
     };
