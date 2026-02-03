@@ -5,7 +5,8 @@
   "main": "src/app.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon src/server.js",
+    "apidoc": "apidoc -i src/controllers -o docs"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +18,7 @@
     "express-validator": "^7.2.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.5.1",
+    "multer": "^2.0.2",
     "nodemailer": "^7.0.3",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
@@ -24,6 +26,7 @@
     "uuid": "^10.0.0"
   },
   "devDependencies": {
+    "apidoc": "^1.2.0",
     "nodemon": "^3.1.4"
   }
 }

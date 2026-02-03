@@ -12,3 +12,10 @@ yarn-error.log*
 # Build
 dist/
 build/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

@@ -4,12 +4,8 @@ const router = express.Router();
 const passport = require('passport');
 const sensorController = require('../controllers/sensorController');
 
-// sensor definitions
-router.get('/sensor', passport.authenticate('jwt', { session: false }), sensorController.getSensorDefinitions);
-router.post('/sensor', passport.authenticate('jwt', { session: false }), sensorController.createSensorDefinition);
-
-// user measure
-router.post('/measure', passport.authenticate('jwt', { session: false }), sensorController.addMeasure);
-router.get('/measure', passport.authenticate('jwt', { session: false }), sensorController.getMeasures); // con filtro por timestamp opcional
+// Sensor definitions routes
+router.get('/definitions', passport.authenticate('jwt', { session: false }), sensorController.getSensorDefinitions);
+router.post('/definitions', passport.authenticate('jwt', { session: false }), sensorController.createSensorDefinition);
 
 module.exports = router;

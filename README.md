@@ -1,7 +1,6 @@
+# ABC2Sense Backend
 
-# Proyecto de API con Node.js y MongoDB
-
-Este proyecto es una API construida con Node.js, Express, MongoDB y Passport.js para la autenticación. La API incluye rutas para el registro y login de usuarios, así como la gestión de sensores.
+Backend API para la plataforma de gestión de sensores IoT ABC2Sense, construida con Node.js, Express, MongoDB y Passport.js.
 
 ## Requisitos
 
@@ -10,110 +9,210 @@ Este proyecto es una API construida con Node.js, Express, MongoDB y Passport.js 
 
 ## Instalación
 
-1. Clona este repositorio.
-
+1. Clona este repositorio:
 ```bash
-git clone https://github.com/tu-usuario/tu-repositorio.git
+git clone https://github.com/tu-usuario/ABC2Sense_Backend.git
+cd ABC2Sense_Backend
 ```
 
-2. Navega a la carpeta del proyecto.
-
-```bash
-cd tu-repositorio
-```
-
-3. Instala las dependencias.
-
+2. Instala las dependencias:
 ```bash
 npm install
 ```
 
-4. Configura las variables de entorno en un archivo `.env`.
-
+3. Configura las variables de entorno en un archivo `.env`:
 ```bash
 MONGO_URI=tu-URI-de-MongoDB
 JWT_SECRET=tu-secreto-para-JWT
 PORT=5000
 ```
 
-## Estructura del Proyecto
-
-El proyecto tiene la siguiente estructura:
-
-```
-/controllers
-    authController.js        # Lógica para registro y login de usuarios
-    sensorController.js      # Lógica para la gestión de sensores
-/models
-    user.js                  # Definición del esquema del modelo User
-    sensor.js                # Definición del esquema del modelo Sensor
-/routes
-    authRoutes.js            # Rutas para el registro y login de usuarios
-    sensorRoutes.js          # Rutas para la gestión de sensores
-/validators
-    authValidator.js         # Validaciones para las rutas de autenticación
-/config
-    passportService.js       # Configuración de Passport.js para autenticación local y JWT
-.env                         # Variables de entorno (no incluido en el repositorio)
-server.js                    # Archivo principal del servidor
-```
-
-### Descripción de las carpetas y archivos
-
-- **controllers**: Contiene la lógica de negocio de la API. Aquí están los controladores que gestionan las solicitudes y respuestas.
-  - `authController.js`: Controlador para el registro y login de usuarios.
-  - `sensorController.js`: Controlador para crear y listar sensores asociados a los usuarios.
-  
-- **models**: Define los esquemas de MongoDB usando Mongoose.
-  - `user.js`: Modelo de usuario, con su esquema, validaciones y cifrado de contraseñas.
-  - `sensor.js`: Modelo de sensor, asociado a un usuario y que contiene datos de ubicación y valor.
-  
-- **routes**: Contiene las rutas que gestionan las diferentes API endpoints.
-  - `authRoutes.js`: Define las rutas de autenticación, `/api/register` y `/api/login`.
-  - `sensorRoutes.js`: Define las rutas relacionadas con los sensores, protegidas por JWT.
-
-- **validators**: Contiene los validadores de entrada para las rutas.
-  - `authValidator.js`: Valida las entradas de registro y login de usuarios, incluyendo verificación de contraseñas, correos electrónicos, etc.
-  
-- **config**: Contiene la configuración de Passport.js para la autenticación de usuarios.
-  - `passportService.js`: Configuración de la estrategia local y la estrategia JWT para la autenticación.
-
-- **server.js**: Archivo principal que inicializa el servidor Express, conecta a MongoDB y configura las rutas.
-
 ## Uso
 
-1. Inicia el servidor.
+### Iniciar el servidor
 
+Modo desarrollo (con auto-reload):
+```bash
+npm run dev
+```
+
+Modo producción:
 ```bash
 npm start
 ```
 
-El servidor debería estar corriendo en `http://localhost:5000` (o en el puerto que hayas definido en tu archivo `.env`).
+El servidor estará corriendo en `http://localhost:5000` (o en el puerto configurado en `.env`).
 
-### Endpoints disponibles
+## Documentación de la API
 
-- `POST /api/register`: Registro de un nuevo usuario.
-  - **Campos requeridos**: `username`, `email`, `password`
-  - El `password` debe tener al menos 8 caracteres, una letra mayúscula y un carácter especial.
+### Acceder a la documentación
 
-- `POST /api/login`: Inicia sesión con un usuario registrado.
-  - **Campos requeridos**: `email`, `password`
-  - Si la autenticación es exitosa, se devuelve un token JWT que expira en 8 horas.
+Una vez que el servidor esté corriendo, puedes acceder a la documentación completa de la API en:
 
-- `POST /api/sensors`: Crea un nuevo sensor asociado al usuario autenticado (requiere token JWT).
-  - **Campos requeridos**: `sensorId`, `value`, `latitude`, `longitude`
+**Desarrollo local:**
+```
+http://localhost:5000/api-docs
+http://localhost:5000/api/docs
+```
 
-- `GET /api/sensors/:userId`: Obtiene los sensores asociados a un usuario (requiere token JWT).
+**Producción:**
+```
+http://167.86.91.53/api/docs
+```
+
+> **Nota:** En producción, primero debes configurar Nginx. Ver sección "Configurar Nginx" más abajo.
+
+### Regenerar la documentación
+
+Si realizas cambios en los controladores, puedes regenerar la documentación ejecutando:
+
+```bash
+npm run apidoc
+```
+
+La documentación se genera automáticamente a partir de las anotaciones en los controladores usando [apiDoc](https://apidocjs.com/).
+
+### Configurar Nginx (Producción)
+
+Para que la documentación sea accesible en producción a través de `http://167.86.91.53/api/docs`:
+
+**Opción A: Script automático (Recomendado)**
+```bash
+cd /root/sensor/ABC2Sense_backend
+sudo ./scripts/update-nginx.sh
+```
+
+**Opción B: Manual**
+```bash
+# 1. Hacer backup de la configuración actual
+sudo cp /etc/nginx/sites-available/catabo_front /etc/nginx/sites-available/catabo_front.backup
+
+# 2. Copiar la nueva configuración
+sudo cp nginx-catabo_front-updated.conf /etc/nginx/sites-available/catabo_front
+
+# 3. Verificar sintaxis
+sudo nginx -t
+
+# 4. Si todo está bien, recargar Nginx
+sudo systemctl reload nginx
+```
+
+El script hace backup automático de tu configuración actual antes de aplicar cambios.
+
+## Estructura del Proyecto
+
+```
+/src
+  /controllers          # Lógica de negocio
+    authController.js       # Autenticación de usuarios
+    adminController.js      # Gestión de administradores
+    userController.js       # Gestión de usuarios
+    sensorController.js     # Gestión de sensores y mediciones
+    measurementsController.js # Gestión de mediciones
+    firmwareController.js   # Gestión de firmware OTA
+  /models              # Modelos de MongoDB
+    user.js                # Usuario
+    admin.js               # Administrador
+    sensor.js              # Sensor
+    sensorDefinition.js    # Definición de tipos de sensores
+    measurement.js         # Mediciones
+    firmware.js            # Firmware
+  /routes              # Definición de rutas
+    authRoutes.js          # Rutas de autenticación
+    adminRoutes.js         # Rutas de administración
+    userRoutes.js          # Rutas de usuarios
+    sensorRoutes.js        # Rutas de sensores
+    measurements.js        # Rutas de mediciones
+    firmwareRoutes.js      # Rutas de firmware
+  /validators          # Validadores de entrada
+  /config              # Configuración
+    passportService.js     # Configuración de Passport.js
+  /middleware          # Middlewares personalizados
+  server.js            # Punto de entrada del servidor
+/docs                  # Documentación generada de la API
+```
+
+## Principales Características
+
+### Autenticación y Autorización
+- Sistema de autenticación basado en JWT
+- Roles de usuario y administrador
+- Tokens con expiración de 8 horas
+
+### Gestión de Sensores
+- Creación y definición de tipos de sensores
+- Registro de mediciones con coordenadas GPS
+- Filtrado por rango de fechas y ubicación (radio)
+- Paginación de resultados
+
+### Panel de Administración
+- Gestión de usuarios
+- Estadísticas del sistema
+- Control de acceso basado en roles (admin/superadmin)
+
+### Gestión de Firmware OTA
+- Subida de archivos de firmware
+- Versionamiento de firmware
+- Distribución a dispositivos IoT
+- Control de versiones activas
+
+### Mediciones
+- Almacenamiento de múltiples sensores simultáneamente
+- Agrupación por timestamp y ubicación
+- Consultas con filtros geoespaciales
+
+## Endpoints Principales
+
+### Autenticación
+- `POST /api/auth/register` - Registro de usuarios
+- `POST /api/auth/login` - Login de usuarios
+- `POST /api/auth` - Login de administradores
+
+### Sensor Definitions
+- `GET /api/sensor/definitions` - Obtener definiciones de sensores
+- `POST /api/sensor/definitions` - Crear definición de sensor
+
+### Measurements
+- `POST /api/measurements` - Crear medición con múltiples sensores
+- `GET /api/measurements` - Obtener mediciones (con filtros de fecha, ubicación y paginación)
+- `DELETE /api/measurements/:id` - Eliminar una medición
+
+### Administración
+- `GET /api/auth/users` - Listar usuarios
+- `GET /api/auth/stats` - Estadísticas del sistema
+- `DELETE /api/auth/users/:id` - Eliminar usuario
+
+### Firmware
+- `POST /api/firmware/upload` - Subir firmware (admin)
+- `GET /api/firmware/latest` - Obtener firmware activo
+- `GET /api/firmware/download/:id` - Descargar firmware
+
+Para ver la documentación completa de todos los endpoints, visita `/api-docs` cuando el servidor esté corriendo.
 
 ## Seguridad
 
-- La API utiliza `JWT` para la autenticación de usuarios. 
-- Los tokens tienen una duración de 8 horas.
-- Las rutas relacionadas con sensores están protegidas mediante `passport.authenticate('jwt')`.
+- Autenticación JWT para protección de endpoints
+- Bcrypt para hash de contraseñas
+- Validación de entrada con express-validator
+- Control de acceso basado en roles
+- Tokens con expiración configurable
 
-## Notas adicionales
+## Scripts Disponibles
 
-- Asegúrate de tener una instancia de MongoDB corriendo localmente o configurada en un servicio en la nube como MongoDB Atlas.
-- La autenticación está implementada usando `passport.js` con estrategias `Local` y `JWT`.
-```
+- `npm start` - Iniciar servidor en modo producción
+- `npm run dev` - Iniciar servidor en modo desarrollo con auto-reload
+- `npm run apidoc` - Generar documentación de la API
 
+## Tecnologías Utilizadas
+
+- **Express.js** - Framework web
+- **MongoDB & Mongoose** - Base de datos y ODM
+- **Passport.js** - Autenticación (Local & JWT)
+- **bcryptjs** - Hash de contraseñas
+- **express-validator** - Validación de entrada
+- **Multer** - Upload de archivos (firmware)
+- **apiDoc** - Generación de documentación
+
+## Licencia
+
+ISC

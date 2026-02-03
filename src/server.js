@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
-const passport = require('./config/passportService'); // usa tu servicio de Passport
+const passport = require('./config/passportService');
 
 dotenv.config();
 
@@ -11,36 +11,61 @@ const app = express();
 app.use(express.json());
 app.use(passport.initialize());
 
-console.log('Connecting to MongoDB...');
+// Import new routes
+const adminRoutes = require('./routes/adminRoutes');
+const firmwareRoutes = require('./routes/firmwareRoutes');
+
+console.log("Connecting to mongodb...");
 
 (async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log('MongoDB connected');
+    try {
+        await mongoose.connect(process.env.MONGO_URI);
+        console.log('MongoDB connected');
 
-    // Cargar rutas dinámicamente desde /routes
-    const routesPath = path.join(__dirname, 'routes');
-    fs.readdirSync(routesPath).forEach((file) => {
-      if (file.endsWith('.js')) {
-        const route = require(path.join(routesPath, file));
-        const routeName = file.replace('.js', '');
+        // Serve API documentation - MUST be before other routes
+        const docsPath = path.join(__dirname, '../docs');
+        console.log(`Serving API docs from: ${docsPath}`);
 
-        // authRoutes -> /api/auth
-        if (routeName === 'authRoutes') {
-          app.use('/api/auth', route);
-        } else {
-          // sensorRoutes -> /api/sensor
-          app.use(`/api/${routeName.replace('Routes', '').toLowerCase()}`, route);
-        }
-      }
-    });
+        // Test endpoint to verify API docs are accessible
+        app.get('/api-docs-test', (req, res) => {
+            res.json({
+                message: 'API docs should be available',
+                docsPath: docsPath,
+                exists: fs.existsSync(docsPath)
+            });
+        });
 
-    const PORT = process.env.PORT || 5000;
-    app.listen(PORT, '0.0.0.0', () =>
-      console.log(`✅ Server running on port ${PORT}`)
-    );
-  } catch (error) {
-    console.error('❌ Error connecting to MongoDB:', error.message);
-    process.exit(1);
-  }
+        // Serve docs on both /api-docs and /api/docs for proxy compatibility
+        app.use('/api/docs', express.static(docsPath));
+
+        // Register admin and firmware routes
+        app.use('/api/auth', adminRoutes);
+        app.use('/api/firmware', firmwareRoutes);
+
+        // Auto-load other routes
+        const routesPath = path.join(__dirname, 'routes');
+        fs.readdirSync(routesPath).forEach((file) => {
+            if (file.endsWith('.js')) {
+                const route = require(path.join(routesPath, file));
+                const routeName = file.replace('.js', '');
+
+                if (routeName === 'authRoutes') {
+                    app.use('/api/auth', route);
+                } else {
+                    console.log(`Route /api/${routeName.replace('Routes', '').toLowerCase()}`);
+                    app.use(`/api/${routeName.replace('Routes', '').toLowerCase()}`, route);
+                }
+            }
+        });
+
+        const PORT = process.env.PORT || 5000;
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`Server running on port ${PORT}`);
+            console.log(`API Documentation available at:`);
+            console.log(`  - http://localhost:${PORT}/api-docs`);
+            console.log(`  - http://localhost:${PORT}/api/docs`);
+        });
+    } catch (e) {
+        console.log(e);
+    }
 })();

@@ -1,158 +1,38 @@
 // controllers/sensorController.js
-const Sensor = require('../models/sensor');
 const SensorDefinition = require('../models/sensorDefinition');
 
-// Guardar medida para varios sensores
-exports.addMeasure = async (req, res) => {
-  const { timestamp = new Date(), latitude = null, longitude = null, measurements } = req.body;
-
-
-  try {
-    const userId = req.user._id;
-
-    const rawEntries = Object.entries(measurements);
-    const entries = rawEntries.map(([k, v]) => [parseInt(k), v]);
-
-
-    const savedSensors = [];
-
-    for (let [sensorId, value] of entries) {
-      const sensor = new Sensor({
-        user: userId,
-        timestamp: new Date(timestamp),
-        sensorId,
-        value,
-        coordinates: (latitude != null && longitude != null)
-          ? { latitude, longitude }
-          : undefined
-      });
-
-      await sensor.save();
-      savedSensors.push(sensor);
-    }
-
-    res.status(201).json(savedSensors);
-
-  } catch (error) {
-    console.error("Error saving measurements:", error);
-    res.status(500).json({ error: "Error saving measurements." });
-  }
-};
-
-
-  const R = 6371; // Radio de la Tierra en km
-
-exports.getMeasures = async (req, res) => {
-  const {
-    from,
-    to,
-    lat,
-    lng,
-    radius,
-    page = 1,
-    limit = 20
-  } = req.query;
-
-  const filter = {
-    user: req.user._id
-  };
-
-  if (from || to) {
-    filter.timestamp = {};
-    if (from) filter.timestamp.$gte = new Date(from);
-    if (to) filter.timestamp.$lte = new Date(to);
-  }
-
-  let haversineQuery = {};
-
-  if (lat && lng && radius) {
-    const latRad = parseFloat(lat) * Math.PI / 180;
-    const lngRad = parseFloat(lng) * Math.PI / 180;
-
-    haversineQuery = {
-      $expr: {
-        $lte: [
-          {
-            $multiply: [
-              R,
-              {
-                $acos: {
-                  $add: [
-                    {
-                      $multiply: [
-                        { $sin: { $degreesToRadians: "$coordinates.latitude" } },
-                        Math.sin(latRad)
-                      ]
-                    },
-                    {
-                      $multiply: [
-                        { $cos: { $degreesToRadians: "$coordinates.latitude" } },
-                        Math.cos(latRad),
-                        {
-                          $cos: {
-                            $subtract: [
-                              { $degreesToRadians: "$coordinates.longitude" },
-                              lngRad
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  ]
-                }
-              }
-            ]
-          },
-          parseFloat(radius)
-        ]
-      }
-    };
-  }
-
-  try {
-    const query = Object.keys(haversineQuery).length > 0
-      ? { $and: [filter, haversineQuery] }
-      : filter;
-
-    const allSensors = await Sensor.find(query).sort({ timestamp: -1 });
-
-    // Agrupar por timestamp y coordenadas
-    const grouped = {};
-    for (const sensor of allSensors) {
-      const key = `${sensor.timestamp.toISOString()}_${sensor.coordinates.latitude}_${sensor.coordinates.longitude}`;
-      if (!grouped[key]) {
-        grouped[key] = {
-          coordinates: {
-            latitude: sensor.coordinates.latitude,
-            longitude: sensor.coordinates.longitude,
-          },
-          timestamp: sensor.timestamp,
-          measurements: {},
-        };
-      }
-      grouped[key].measurements[sensor.sensorId] = sensor.value;
-    }
-
-    const allGroups = Object.values(grouped);
-
-    const total = allGroups.length;
-
-    // Aplicar paginación sobre los grupos
-    const paginated = allGroups.slice((page - 1) * limit, page * limit);
-
-    res.status(200).json({
-      total,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      measures: paginated
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-
-// Crear definición de sensor
+/**
+ * @api {post} /api/sensor/definitions Create Sensor Definition
+ * @apiName CreateSensorDefinition
+ * @apiGroup Sensor Definitions
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Create a new sensor type definition
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiBody {Number} sensorId Unique sensor ID
+ * @apiBody {String} title Sensor title
+ * @apiBody {String} measure What the sensor measures
+ * @apiBody {String} unit Unit of measurement
+ * @apiBody {String} description Sensor description
+ *
+ * @apiSuccess (201) {Object} definition Created sensor definition
+ *
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 201 Created
+ *     {
+ *       "_id": "507f1f77bcf86cd799439011",
+ *       "sensorId": 1,
+ *       "title": "Temperature Sensor",
+ *       "measure": "Temperature",
+ *       "unit": "°C",
+ *       "description": "Measures ambient temperature"
+ *     }
+ *
+ * @apiError (400) {String} message Sensor ID already exists
+ * @apiError (401) Unauthorized User not authenticated
+ */
 exports.createSensorDefinition = async (req, res) => {
   const { sensorId, title, measure, unit, description } = req.body;
   try {
@@ -167,7 +47,34 @@ exports.createSensorDefinition = async (req, res) => {
   }
 };
 
-// Obtener definiciones de sensores
+/**
+ * @api {get} /api/sensor/definitions Get All Sensor Definitions
+ * @apiName GetSensorDefinitions
+ * @apiGroup Sensor Definitions
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get all sensor type definitions
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiSuccess {Object[]} sensors Array of sensor definitions
+ *
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     [
+ *       {
+ *         "_id": "507f1f77bcf86cd799439011",
+ *         "sensorId": 1,
+ *         "title": "Temperature Sensor",
+ *         "measure": "Temperature",
+ *         "unit": "°C",
+ *         "description": "Measures ambient temperature"
+ *       }
+ *     ]
+ *
+ * @apiError (500) {String} error Error message
+ * @apiError (401) Unauthorized User not authenticated
+ */
 exports.getSensorDefinitions = async (req, res) => {
   try {
     const sensors = await SensorDefinition.find({});
