@@ -1,0 +1,52 @@
+name: Move Trello Card to Done
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  move-card:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract card code from PR title
+        id: extract
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          # Extract pattern like [AUTH-01], [MEAS-01], etc.
+          CODE=$(echo "$TITLE" | grep -oP '\[([A-Z]+-\d+)\]' | tr -d '[]' | head -1)
+          echo "card_code=$CODE" >> $GITHUB_OUTPUT
+          echo "Found card code: $CODE"
+
+      - name: Find and move Trello card
+        if: steps.extract.outputs.card_code != ''
+        env:
+          TRELLO_API_KEY: ${{ secrets.TRELLO_API_KEY }}
+          TRELLO_TOKEN: ${{ secrets.TRELLO_TOKEN }}
+          TRELLO_DONE_LIST_ID: ${{ secrets.TRELLO_DONE_LIST_ID }}
+          CARD_CODE: ${{ steps.extract.outputs.card_code }}
+        run: |
+          echo "Searching for card with code: $CARD_CODE"
+
+          # Search for the card in the board
+          BOARD_ID="67fce6ec742015ad1e58d2f7"
+
+          # Get all cards from In Progress list
+          IN_PROGRESS_LIST="681ba9be6b1492f6da98c66b"
+
+          CARD_ID=$(curl -s "https://api.trello.com/1/lists/${IN_PROGRESS_LIST}/cards?key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}" | \
+            jq -r ".[] | select(.name | contains(\"[$CARD_CODE]\")) | .id" | head -1)
+
+          if [ -n "$CARD_ID" ] && [ "$CARD_ID" != "null" ]; then
+            echo "Found card ID: $CARD_ID"
+            echo "Moving to Done list..."
+
+            curl -s -X PUT \
+              "https://api.trello.com/1/cards/${CARD_ID}?idList=${TRELLO_DONE_LIST_ID}&key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}" \
+              -o /dev/null
+
+            echo "Card moved to Done!"
+          else
+            echo "Card not found in In Progress list"
+          fi
