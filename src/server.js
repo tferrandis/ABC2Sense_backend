@@ -1,14 +1,13 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const passport = require('./config/passportService');  
 const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
+const passport = require('./config/passportService');
 
 dotenv.config();
 
 const app = express();
-
 app.use(express.json());
 app.use(passport.initialize());
 
@@ -48,10 +47,8 @@ console.log("Connecting to mongodb...");
         fs.readdirSync(routesPath).forEach((file) => {
             if (file.endsWith('.js')) {
                 const route = require(path.join(routesPath, file));
-                // Se asume que el nombre del archivo sin la extensión es la ruta
                 const routeName = file.replace('.js', '');
 
-                // Si es authRoutes.js, registrar la ruta como /api/auth
                 if (routeName === 'authRoutes') {
                     app.use('/api/auth', route);
                 } else {

@@ -11,31 +11,87 @@ const { sendMail } = require('../services/mailer');
  * @apiGroup Authentication
  * @apiVersion 1.0.0
  *
- * @apiDescription Register a new user account
+ * @apiDescription Register a new user account and receive authentication tokens
  *
- * @apiBody {String} username User's username
+ * @apiBody {String} username User's username (min 3 characters)
  * @apiBody {String} email User's email address
- * @apiBody {String} password User's password
+ * @apiBody {String} password User's password (min 8 chars, 1 uppercase, 1 special char)
  *
- * @apiSuccess {String} message Success message
+ * @apiSuccess (201) {Object} user User information
+ * @apiSuccess (201) {String} user._id User ID
+ * @apiSuccess (201) {String} user.username Username
+ * @apiSuccess (201) {String} user.email Email address
+ * @apiSuccess (201) {String} user.role User role (default: "user")
+ * @apiSuccess (201) {Boolean} user.emailVerified Email verification status (default: false)
+ * @apiSuccess (201) {String} accessToken JWT access token (8h expiration)
+ * @apiSuccess (201) {String} refreshToken JWT refresh token (7d expiration)
+ * @apiSuccess (201) {String} expiresAt Access token expiration timestamp
  *
  * @apiSuccessExample {json} Success-Response:
  *     HTTP/1.1 201 Created
  *     {
- *       "message": "User registered successfully"
+ *       "user": {
+ *         "_id": "507f1f77bcf86cd799439011",
+ *         "username": "johndoe",
+ *         "email": "john@example.com",
+ *         "role": "user",
+ *         "emailVerified": false
+ *       },
+ *       "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+ *       "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+ *       "expiresAt": "2024-01-01T20:00:00.000Z"
  *     }
  *
- * @apiError (500) {String} message Error message
- * @apiError (500) {Object} error Error details
+ * @apiError (400) {String} message Email already registered
+ * @apiError (400) {String} message Username already taken
+ * @apiError (400) {Array} errors Validation errors
+ * @apiError (500) {String} message Server error
  */
 exports.register = async (req, res) => {
   const { username, email, password } = req.body;
+
   try {
+    // Check for existing email
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) {
+      return res.status(400).json({ message: 'Email already registered' });
+    }
+
+    // Check for existing username
+    const existingUsername = await User.findOne({ username });
+    if (existingUsername) {
+      return res.status(400).json({ message: 'Username already taken' });
+    }
+
+    // Create user (role defaults to 'user', emailVerified defaults to false)
     const user = new User({ username, email, password });
     await user.save();
-    res.status(201).json({ message: 'User registered successfully' });
+
+    // Generate access token (8h expiration)
+    const accessTokenExpiresIn = '8h';
+    const expirationDate = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const accessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: accessTokenExpiresIn });
+
+    // Generate refresh token (7d expiration)
+    const refreshToken = jwt.sign({ id: user._id, type: 'refresh' }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    // Return user data without password
+    const userResponse = {
+      _id: user._id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      emailVerified: user.emailVerified
+    };
+
+    res.status(201).json({
+      user: userResponse,
+      accessToken,
+      refreshToken,
+      expiresAt: expirationDate.toISOString()
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Error registering user', error });
+    res.status(500).json({ message: 'Error registering user', error: error.message });
   }
 };
 

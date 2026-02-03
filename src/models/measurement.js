@@ -19,5 +19,3 @@ const MeasurementSchema = new Schema({
 
 const Measurement = model('Measurement', MeasurementSchema);
 module.exports = Measurement;
-	
-
