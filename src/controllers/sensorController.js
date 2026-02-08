@@ -7,15 +7,17 @@ const SensorDefinition = require('../models/sensorDefinition');
  * @apiGroup Sensor Definitions
  * @apiVersion 1.0.0
  *
- * @apiDescription Create a new sensor type definition
+ * @apiDescription Create a new sensor type definition in the catalog
  *
  * @apiHeader {String} Authorization Bearer JWT token
  *
- * @apiBody {Number} sensorId Unique sensor ID
- * @apiBody {String} title Sensor title
- * @apiBody {String} measure What the sensor measures
- * @apiBody {String} unit Unit of measurement
- * @apiBody {String} description Sensor description
+ * @apiBody {Number} sensorId Unique numeric sensor ID
+ * @apiBody {String} key Unique alphanumeric key (e.g. "TEMP", "PH"). Stored as uppercase.
+ * @apiBody {String} name Display name (e.g. "Temperature Sensor")
+ * @apiBody {String} unit Unit of measurement (e.g. "°C", "pH", "%")
+ * @apiBody {String} [description] Sensor description
+ * @apiBody {String="device","backend","manual"} origin Source type of the sensor
+ * @apiBody {Boolean} [enabled=true] Whether the sensor is active
  *
  * @apiSuccess (201) {Object} definition Created sensor definition
  *
@@ -24,22 +26,29 @@ const SensorDefinition = require('../models/sensorDefinition');
  *     {
  *       "_id": "507f1f77bcf86cd799439011",
  *       "sensorId": 1,
- *       "title": "Temperature Sensor",
- *       "measure": "Temperature",
+ *       "key": "TEMP",
+ *       "name": "Temperature Sensor",
  *       "unit": "°C",
- *       "description": "Measures ambient temperature"
+ *       "description": "Measures ambient temperature",
+ *       "origin": "device",
+ *       "enabled": true,
+ *       "created_at": "2026-01-15T10:00:00.000Z",
+ *       "updated_at": "2026-01-15T10:00:00.000Z"
  *     }
  *
- * @apiError (400) {String} message Sensor ID already exists
+ * @apiError (400) {String} message Sensor ID or key already exists
  * @apiError (401) Unauthorized User not authenticated
  */
 exports.createSensorDefinition = async (req, res) => {
-  const { sensorId, title, measure, unit, description } = req.body;
+  const { sensorId, key, name, unit, description, origin, enabled } = req.body;
   try {
-    const existing = await SensorDefinition.findOne({ sensorId });
-    if (existing) return res.status(400).json({ message: "Sensor ID already exists" });
+    const existingId = await SensorDefinition.findOne({ sensorId });
+    if (existingId) return res.status(400).json({ message: "Sensor ID already exists" });
 
-    const def = new SensorDefinition({ sensorId, title, description, unit, measure });
+    const existingKey = await SensorDefinition.findOne({ key: key.toUpperCase() });
+    if (existingKey) return res.status(400).json({ message: "Sensor key already exists" });
+
+    const def = new SensorDefinition({ sensorId, key, name, unit, description, origin, enabled });
     await def.save();
     res.status(201).json(def);
   } catch (error) {
@@ -53,7 +62,7 @@ exports.createSensorDefinition = async (req, res) => {
  * @apiGroup Sensor Definitions
  * @apiVersion 1.0.0
  *
- * @apiDescription Get all sensor type definitions
+ * @apiDescription Get all sensor type definitions from the catalog
  *
  * @apiHeader {String} Authorization Bearer JWT token
  *
@@ -65,10 +74,14 @@ exports.createSensorDefinition = async (req, res) => {
  *       {
  *         "_id": "507f1f77bcf86cd799439011",
  *         "sensorId": 1,
- *         "title": "Temperature Sensor",
- *         "measure": "Temperature",
+ *         "key": "TEMP",
+ *         "name": "Temperature Sensor",
  *         "unit": "°C",
- *         "description": "Measures ambient temperature"
+ *         "description": "Measures ambient temperature",
+ *         "origin": "device",
+ *         "enabled": true,
+ *         "created_at": "2026-01-15T10:00:00.000Z",
+ *         "updated_at": "2026-01-15T10:00:00.000Z"
  *       }
  *     ]
  *
