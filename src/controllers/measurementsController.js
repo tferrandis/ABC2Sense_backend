@@ -3,6 +3,102 @@ const Measurement = require('../models/measurement');
 const R = 6371; // Radio de la Tierra en km
 
 /**
+ * Builds a MongoDB filter from request query params.
+ * Shared by getMeasurements and deleteMeasurementsBulk.
+ */
+function buildMeasurementFilter(req) {
+  const {
+    from,
+    to,
+    lat,
+    lng,
+    radius,
+    radius_m,
+    sensorId,
+    userId
+  } = req.query;
+
+  // Determine user_id filter: admin can specify userId, others use their own
+  const effectiveUserId = (req.user.role === 'admin' && userId)
+    ? userId
+    : req.user._id;
+
+  const filter = {
+    user_id: effectiveUserId
+  };
+
+  // Filter by sensorId if provided
+  if (sensorId) {
+    filter.measurements = {
+      $elemMatch: {
+        sensor_id: isNaN(sensorId) ? sensorId : parseInt(sensorId)
+      }
+    };
+  }
+
+  // Filtro por rango de fechas
+  if (from || to) {
+    filter.timestamp = {};
+    if (from) filter.timestamp.$gte = new Date(from);
+    if (to) filter.timestamp.$lte = new Date(to);
+  }
+
+  // Filtro geoespacial usando fórmula de Haversine
+  let haversineQuery = {};
+  const radiusKm = radius ? parseFloat(radius) : (radius_m ? parseFloat(radius_m) / 1000 : null);
+
+  if (lat && lng && radiusKm) {
+    const latRad = parseFloat(lat) * Math.PI / 180;
+    const lngRad = parseFloat(lng) * Math.PI / 180;
+
+    haversineQuery = {
+      $expr: {
+        $lte: [
+          {
+            $multiply: [
+              R,
+              {
+                $acos: {
+                  $add: [
+                    {
+                      $multiply: [
+                        { $sin: { $multiply: [{ $divide: [Math.PI, 180] }, "$location.lat"] } },
+                        Math.sin(latRad)
+                      ]
+                    },
+                    {
+                      $multiply: [
+                        { $cos: { $multiply: [{ $divide: [Math.PI, 180] }, "$location.lat"] } },
+                        Math.cos(latRad),
+                        {
+                          $cos: {
+                            $subtract: [
+                              { $multiply: [{ $divide: [Math.PI, 180] }, "$location.long"] },
+                              lngRad
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          radiusKm
+        ]
+      }
+    };
+  }
+
+  const query = Object.keys(haversineQuery).length > 0
+    ? { $and: [filter, haversineQuery] }
+    : filter;
+
+  return query;
+}
+
+/**
  * @api {post} /api/measurements Create Measurement
  * @apiName CreateMeasurement
  * @apiGroup Measurements
@@ -137,97 +233,10 @@ exports.createMeasurement = async (req, res) => {
  * @apiError (401) Unauthorized User not authenticated
  */
 exports.getMeasurements = async (req, res) => {
-  const {
-    from,
-    to,
-    lat,
-    lng,
-    radius,
-    radius_m,
-    sensorId,
-    userId,
-    page = 1,
-    limit = 20
-  } = req.query;
-
-  // Determine user_id filter: admin can specify userId, others use their own
-  const effectiveUserId = (req.user.role === 'admin' && userId)
-    ? userId
-    : req.user._id;
-
-  const filter = {
-    user_id: effectiveUserId
-  };
-
-  // Filter by sensorId if provided
-  if (sensorId) {
-    filter.measurements = {
-      $elemMatch: {
-        sensor_id: isNaN(sensorId) ? sensorId : parseInt(sensorId)
-      }
-    };
-  }
-
-  // Filtro por rango de fechas
-  if (from || to) {
-    filter.timestamp = {};
-    if (from) filter.timestamp.$gte = new Date(from);
-    if (to) filter.timestamp.$lte = new Date(to);
-  }
-
-  // Filtro geoespacial usando fórmula de Haversine
-  let haversineQuery = {};
-  // Support both radius (km) and radius_m (meters)
-  const radiusKm = radius ? parseFloat(radius) : (radius_m ? parseFloat(radius_m) / 1000 : null);
-
-  if (lat && lng && radiusKm) {
-    const latRad = parseFloat(lat) * Math.PI / 180;
-    const lngRad = parseFloat(lng) * Math.PI / 180;
-
-    haversineQuery = {
-      $expr: {
-        $lte: [
-          {
-            $multiply: [
-              R,
-              {
-                $acos: {
-                  $add: [
-                    {
-                      $multiply: [
-                        { $sin: { $multiply: [{ $divide: [Math.PI, 180] }, "$location.lat"] } },
-                        Math.sin(latRad)
-                      ]
-                    },
-                    {
-                      $multiply: [
-                        { $cos: { $multiply: [{ $divide: [Math.PI, 180] }, "$location.lat"] } },
-                        Math.cos(latRad),
-                        {
-                          $cos: {
-                            $subtract: [
-                              { $multiply: [{ $divide: [Math.PI, 180] }, "$location.long"] },
-                              lngRad
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  ]
-                }
-              }
-            ]
-          },
-          radiusKm
-        ]
-      }
-    };
-  }
+  const { page = 1, limit = 20 } = req.query;
 
   try {
-    const query = Object.keys(haversineQuery).length > 0
-      ? { $and: [filter, haversineQuery] }
-      : filter;
+    const query = buildMeasurementFilter(req);
 
     // Contar total de documentos
     const total = await Measurement.countDocuments(query);
@@ -347,6 +356,67 @@ exports.deleteMeasurement = async (req, res) => {
 
     await Measurement.findByIdAndDelete(req.params.id);
     res.status(200).json({ message: 'Medición eliminada correctamente' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * @api {delete} /api/measurements Bulk Delete Measurements
+ * @apiName BulkDeleteMeasurements
+ * @apiGroup Measurements
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Delete multiple measurements matching the provided filters.
+ * Uses the same filters as GET /api/measurements.
+ * Requires confirmation header to prevent accidental deletions.
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ * @apiHeader {String} X-Confirm Must be "true" to confirm deletion
+ *
+ * @apiQuery {String} [from] Start timestamp (ISO 8601)
+ * @apiQuery {String} [to] End timestamp (ISO 8601)
+ * @apiQuery {Number} [lat] Latitude for radius filtering
+ * @apiQuery {Number} [lng] Longitude for radius filtering
+ * @apiQuery {Number} [radius] Radius in km
+ * @apiQuery {Number} [radius_m] Radius in meters
+ * @apiQuery {String|Number} [sensorId] Filter by sensor ID
+ * @apiQuery {String} [userId] Filter by user ID (admin only)
+ *
+ * @apiSuccess {Number} deleted Number of measurements deleted
+ *
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     {
+ *       "deleted": 15
+ *     }
+ *
+ * @apiError (400) {String} error Missing confirmation header or no filters provided
+ * @apiError (401) Unauthorized User not authenticated
+ * @apiError (500) {String} error Error message
+ */
+exports.deleteMeasurementsBulk = async (req, res) => {
+  // Require confirmation header
+  if (req.headers['x-confirm'] !== 'true') {
+    return res.status(400).json({
+      error: 'Bulk delete requires confirmation. Set header X-Confirm: true'
+    });
+  }
+
+  // Require at least one filter
+  const { from, to, lat, lng, radius, radius_m, sensorId, userId } = req.query;
+  const hasFilter = from || to || (lat && lng && (radius || radius_m)) || sensorId || userId;
+
+  if (!hasFilter) {
+    return res.status(400).json({
+      error: 'At least one filter is required for bulk delete (from, to, sensorId, lat/lng/radius, userId)'
+    });
+  }
+
+  try {
+    const query = buildMeasurementFilter(req);
+    const result = await Measurement.deleteMany(query);
+    res.status(200).json({ deleted: result.deletedCount });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -16,6 +16,9 @@ router.get('/', passport.authenticate('jwt', { session: false }), measurementCon
 // Obtener una medición específica por ID
 router.get('/:id', passport.authenticate('jwt', { session: false }), measurementController.getMeasurementById);
 
+// Eliminar mediciones en bulk por filtros (requiere X-Confirm: true)
+router.delete('/', passport.authenticate('jwt', { session: false }), measurementController.deleteMeasurementsBulk);
+
 // Eliminar una medición específica
 router.delete('/:id', passport.authenticate('jwt', { session: false }), measurementController.deleteMeasurement);
 
