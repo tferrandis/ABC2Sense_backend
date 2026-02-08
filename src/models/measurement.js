@@ -17,7 +17,8 @@ const MeasurementSchema = new Schema({
   notes: { type: String, required: false }
 });
 
-
+MeasurementSchema.index({ user_id: 1, timestamp: -1 });
+MeasurementSchema.index({ 'measurements.sensor_id': 1 });
 
 const Measurement = model('Measurement', MeasurementSchema);
 module.exports = Measurement;
