@@ -1,6 +1,17 @@
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/admin');
 const User = require('../models/user');
+const AuditLog = require('../models/auditLog');
+
+const getClientIp = (req) => req.ip || req.headers['x-forwarded-for'] || null;
+
+const safeAuditLog = async (payload) => {
+  try {
+    await AuditLog.create(payload);
+  } catch (_) {
+    // Audit logging must never break the main flow.
+  }
+};
 
 /**
  * @api {post} /api/auth Admin Login
@@ -42,6 +53,14 @@ exports.login = async (req, res) => {
 
     // Validate input
     if (!email || !password) {
+      await safeAuditLog({
+        actor: null,
+        actorIp: getClientIp(req),
+        action: 'admin_login',
+        target: 'Admin',
+        status: 'failure',
+        details: 'Missing email or password'
+      });
       return res.status(400).json({ 
         success: false, 
         message: 'Email and password are required' 
@@ -51,6 +70,14 @@ exports.login = async (req, res) => {
     // Find admin
     const admin = await Admin.findOne({ email });
     if (!admin) {
+      await safeAuditLog({
+        actor: null,
+        actorIp: getClientIp(req),
+        action: 'admin_login',
+        target: 'Admin',
+        status: 'failure',
+        details: `Admin not found for email ${email}`
+      });
       return res.status(401).json({ 
         success: false, 
         message: 'Invalid credentials' 
@@ -60,6 +87,15 @@ exports.login = async (req, res) => {
     // Check password
     const isMatch = await admin.comparePassword(password);
     if (!isMatch) {
+      await safeAuditLog({
+        actor: admin._id,
+        actorIp: getClientIp(req),
+        action: 'admin_login',
+        target: 'Admin',
+        targetId: admin._id,
+        status: 'failure',
+        details: 'Invalid password'
+      });
       return res.status(401).json({ 
         success: false, 
         message: 'Invalid credentials' 
@@ -81,6 +117,16 @@ exports.login = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
+
+    await safeAuditLog({
+      actor: admin._id,
+      actorIp: getClientIp(req),
+      action: 'admin_login',
+      target: 'Admin',
+      targetId: admin._id,
+      status: 'success',
+      details: 'Admin login successful'
+    });
 
     res.json({
       success: true,
@@ -323,6 +369,14 @@ exports.createAdmin = async (req, res) => {
   try {
     // Check if requester is superadmin
     if (req.admin.role !== 'superadmin') {
+      await safeAuditLog({
+        actor: req.admin?._id || null,
+        actorIp: getClientIp(req),
+        action: 'admin_create',
+        target: 'Admin',
+        status: 'failure',
+        details: 'Non-superadmin attempted admin creation'
+      });
       return res.status(403).json({ 
         success: false, 
         message: 'Only superadmins can create new admins' 
@@ -333,6 +387,14 @@ exports.createAdmin = async (req, res) => {
 
     // Validate input
     if (!username || !email || !password) {
+      await safeAuditLog({
+        actor: req.admin?._id || null,
+        actorIp: getClientIp(req),
+        action: 'admin_create',
+        target: 'Admin',
+        status: 'failure',
+        details: 'Missing username/email/password'
+      });
       return res.status(400).json({ 
         success: false, 
         message: 'Username, email and password are required' 
@@ -342,6 +404,14 @@ exports.createAdmin = async (req, res) => {
     // Check if admin already exists
     const existingAdmin = await Admin.findOne({ $or: [{ email }, { username }] });
     if (existingAdmin) {
+      await safeAuditLog({
+        actor: req.admin?._id || null,
+        actorIp: getClientIp(req),
+        action: 'admin_create',
+        target: 'Admin',
+        status: 'failure',
+        details: `Admin already exists for email ${email} or username ${username}`
+      });
       return res.status(400).json({ 
         success: false, 
         message: 'Admin with this email or username already exists' 
@@ -358,6 +428,16 @@ exports.createAdmin = async (req, res) => {
 
     await admin.save();
 
+    await safeAuditLog({
+      actor: req.admin?._id || null,
+      actorIp: getClientIp(req),
+      action: 'admin_create',
+      target: 'Admin',
+      targetId: admin._id,
+      status: 'success',
+      details: `Admin ${admin.email} created with role ${admin.role}`
+    });
+
     res.status(201).json({
       success: true,
       message: 'Admin created successfully',
@@ -373,6 +453,58 @@ exports.createAdmin = async (req, res) => {
       success: false, 
       message: 'Server error', 
       error: error.message 
+    });
+  }
+};
+
+// Get audit logs (admin only)
+exports.getAuditLogs = async (req, res) => {
+  try {
+    const {
+      action,
+      status,
+      actor,
+      from,
+      to,
+      page = 1,
+      limit = 50
+    } = req.query;
+
+    const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+    const safePage = Math.max(parseInt(page, 10) || 1, 1);
+
+    const filter = {};
+    if (action) filter.action = action;
+    if (status) filter.status = status;
+    if (actor) filter.actor = actor;
+
+    if (from || to) {
+      filter.createdAt = {};
+      if (from) filter.createdAt.$gte = new Date(from);
+      if (to) filter.createdAt.$lte = new Date(to);
+    }
+
+    const [items, total] = await Promise.all([
+      AuditLog.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((safePage - 1) * safeLimit)
+        .limit(safeLimit),
+      AuditLog.countDocuments(filter)
+    ]);
+
+    res.json({
+      success: true,
+      page: safePage,
+      limit: safeLimit,
+      total,
+      totalPages: Math.ceil(total / safeLimit),
+      logs: items
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
     });
   }
 };

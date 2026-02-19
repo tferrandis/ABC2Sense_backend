@@ -13,5 +13,6 @@ router.delete('/users/:id', adminAuth, adminController.deleteUser);
 router.get('/stats', adminAuth, adminController.getStats);
 router.get('/profile', adminAuth, adminController.getProfile);
 router.post('/create', adminAuth, adminController.createAdmin);
+router.get('/audit-logs', adminAuth, adminController.getAuditLogs);
 
 module.exports = router;
