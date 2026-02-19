@@ -1,6 +1,7 @@
 const passport = require('passport');
 const User = require('../models/user');
 const RefreshToken = require('../models/refreshToken');
+const PasswordResetToken = require('../models/passwordResetToken');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const Sensor = require('../models/sensor');
@@ -259,21 +260,112 @@ exports.deleteAccount = async (req, res) => {
   }
 };
 
+/**
+ * @api {post} /api/auth/forgot-password Forgot Password
+ * @apiName ForgotPassword
+ * @apiGroup Authentication
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Request a password reset token. Always returns 200 to prevent email enumeration.
+ *
+ * @apiBody {String} email User's email address
+ *
+ * @apiSuccess {String} message Confirmation message
+ *
+ * @apiError (429) {String} error Too many requests
+ */
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
-  const user = await User.findOne({ email });
 
-  if (!user) return res.status(404).json({ message: 'User not found' });
+  try {
+    const user = await User.findOne({ email });
 
-  const token = crypto.randomBytes(32).toString('hex');
+    if (!user) {
+      // Anti-enumeration: always return success
+      return res.json({ message: 'If the email exists, a reset link has been sent' });
+    }
 
-  const resetUrl = `test`;
+    // Invalidate any previous unused tokens for this user
+    await PasswordResetToken.updateMany(
+      { userId: user._id, usedAt: null },
+      { usedAt: new Date() }
+    );
 
-  await sendMail({
-    to: user.email,
-    subject: 'Password Reset',
-    html: `<p>Click the following link to reset your password:</p><a href="${resetUrl}">${resetUrl}</a>`
-  });
+    // Generate new token
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = PasswordResetToken.hashToken(rawToken);
 
-  res.json({ message: 'Reset link sent to email' });
+    await PasswordResetToken.create({
+      userId: user._id,
+      tokenHash,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
+    });
+
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${rawToken}`;
+
+    await sendMail({
+      to: user.email,
+      subject: 'Password Reset - ABC2Sense',
+      html: `<p>You requested a password reset.</p><p>Click the following link to reset your password (valid for 15 minutes):</p><a href="${resetUrl}">${resetUrl}</a><p>If you did not request this, please ignore this email.</p>`
+    });
+
+    res.json({ message: 'If the email exists, a reset link has been sent' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error processing request', error: error.message });
+  }
+};
+
+/**
+ * @api {post} /api/auth/reset-password Reset Password
+ * @apiName ResetPassword
+ * @apiGroup Authentication
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Reset password using a valid reset token. Invalidates all active sessions.
+ *
+ * @apiBody {String} token Reset token received via email
+ * @apiBody {String} password New password (min 8 chars, 1 uppercase, 1 special char)
+ *
+ * @apiSuccess {String} message Password reset confirmation
+ *
+ * @apiError (400) {String} message Invalid or expired reset token
+ */
+exports.resetPassword = async (req, res) => {
+  const { token, password } = req.body;
+
+  try {
+    const tokenHash = PasswordResetToken.hashToken(token);
+    const storedToken = await PasswordResetToken.findOne({
+      tokenHash,
+      usedAt: null,
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (!storedToken) {
+      return res.status(400).json({ message: 'Invalid or expired reset token' });
+    }
+
+    // Update password
+    const user = await User.findById(storedToken.userId);
+    if (!user) {
+      return res.status(400).json({ message: 'User not found' });
+    }
+
+    user.password = password;
+    await user.save();
+
+    // Mark token as used
+    storedToken.usedAt = new Date();
+    await storedToken.save();
+
+    // Revoke all refresh tokens (force re-login on all devices)
+    await RefreshToken.updateMany(
+      { userId: user._id, revoked: false },
+      { revoked: true }
+    );
+
+    res.json({ message: 'Password reset successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error resetting password', error: error.message });
+  }
 };

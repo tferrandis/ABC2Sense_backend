@@ -43,10 +43,24 @@ const logoutValidator = [
   check('refreshToken').notEmpty().withMessage('refreshToken is required'),
 ];
 
+const forgotPasswordValidator = [
+  check('email').isEmail().withMessage('Please enter a valid email'),
+];
+
+const resetPasswordValidator = [
+  check('token').notEmpty().withMessage('Token is required'),
+  check('password')
+    .isLength({ min: 8 }).withMessage('Password must be at least 8 characters long')
+    .matches(/[A-Z]/).withMessage('Password must contain at least one uppercase letter')
+    .matches(/[!@#$%^&*(),.?":{}|<>]/).withMessage('Password must contain at least one special character'),
+];
+
 module.exports = {
   validateRegister,
   loginValidator,
   refreshValidator,
   logoutValidator,
+  forgotPasswordValidator,
+  resetPasswordValidator,
   validateResult
 };
