@@ -2,6 +2,7 @@ const passport = require('passport');
 const User = require('../models/user');
 const RefreshToken = require('../models/refreshToken');
 const PasswordResetToken = require('../models/passwordResetToken');
+const AuditLog = require('../models/auditLog');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const Sensor = require('../models/sensor');
@@ -276,12 +277,20 @@ exports.deleteAccount = async (req, res) => {
  */
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
+  const clientIp = req.ip;
 
   try {
     const user = await User.findOne({ email });
 
     if (!user) {
-      // Anti-enumeration: always return success
+      await AuditLog.create({
+        actor: null,
+        actorIp: clientIp,
+        action: 'password_reset_request',
+        target: 'User',
+        status: 'failure',
+        details: 'Email not found (no info leaked to client)'
+      });
       return res.json({ message: 'If the email exists, a reset link has been sent' });
     }
 
@@ -309,6 +318,16 @@ exports.forgotPassword = async (req, res) => {
       html: `<p>You requested a password reset.</p><p>Click the following link to reset your password (valid for 15 minutes):</p><a href="${resetUrl}">${resetUrl}</a><p>If you did not request this, please ignore this email.</p>`
     });
 
+    await AuditLog.create({
+      actor: user._id,
+      actorIp: clientIp,
+      action: 'password_reset_request',
+      target: 'User',
+      targetId: user._id,
+      status: 'success',
+      details: 'Reset token issued and email sent'
+    });
+
     res.json({ message: 'If the email exists, a reset link has been sent' });
   } catch (error) {
     res.status(500).json({ message: 'Error processing request', error: error.message });
@@ -332,6 +351,7 @@ exports.forgotPassword = async (req, res) => {
  */
 exports.resetPassword = async (req, res) => {
   const { token, password } = req.body;
+  const clientIp = req.ip;
 
   try {
     const tokenHash = PasswordResetToken.hashToken(token);
@@ -342,6 +362,13 @@ exports.resetPassword = async (req, res) => {
     });
 
     if (!storedToken) {
+      await AuditLog.create({
+        actor: null,
+        actorIp: clientIp,
+        action: 'password_reset',
+        status: 'failure',
+        details: 'Invalid or expired reset token'
+      });
       return res.status(400).json({ message: 'Invalid or expired reset token' });
     }
 
@@ -363,6 +390,16 @@ exports.resetPassword = async (req, res) => {
       { userId: user._id, revoked: false },
       { revoked: true }
     );
+
+    await AuditLog.create({
+      actor: user._id,
+      actorIp: clientIp,
+      action: 'password_reset',
+      target: 'User',
+      targetId: user._id,
+      status: 'success',
+      details: 'Password updated, all sessions revoked'
+    });
 
     res.json({ message: 'Password reset successfully' });
   } catch (error) {
