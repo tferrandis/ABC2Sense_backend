@@ -2,10 +2,25 @@ const { check, body, validationResult } = require('express-validator');
 
 const measurementValidator = [
   check('timestamp')
-    .optional() // Ya tiene default en el schema
+    .optional()
     .isISO8601()
     .toDate()
     .withMessage('El timestamp debe ser una fecha válida'),
+
+  body('client_measurement_id')
+    .optional()
+    .isString()
+    .withMessage('client_measurement_id must be a string'),
+
+  body('timestamp_device_ms')
+    .optional()
+    .isNumeric()
+    .withMessage('timestamp_device_ms must be a number'),
+
+  body('source')
+    .optional()
+    .isString()
+    .withMessage('source must be a string'),
 
   body('location.lat')
     .optional()
@@ -16,6 +31,21 @@ const measurementValidator = [
     .optional()
     .isNumeric()
     .withMessage('La longitud debe ser un número'),
+
+  body('location_used')
+    .optional()
+    .isBoolean()
+    .withMessage('location_used must be a boolean'),
+
+  body('capture_with_gps')
+    .optional()
+    .isBoolean()
+    .withMessage('capture_with_gps must be a boolean'),
+
+  body('notebook_id')
+    .optional()
+    .isString()
+    .withMessage('notebook_id must be a string'),
 
   body('measurements')
     .isArray({ min: 1 })

@@ -99,82 +99,96 @@ function buildMeasurementFilter(req) {
 }
 
 /**
+ * Build a measurement document from request item fields.
+ */
+function buildMeasurementDoc(item, effectiveUserId) {
+  return {
+    user_id: effectiveUserId,
+    client_measurement_id: item.client_measurement_id || null,
+    device_id: item.device_id || null,
+    timestamp: item.timestamp ? new Date(item.timestamp) : new Date(),
+    timestamp_device_ms: item.timestamp_device_ms || null,
+    source: item.source || null,
+    location: item.location || { lat: null, long: null },
+    location_used: item.location_used || false,
+    capture_with_gps: item.capture_with_gps || false,
+    notebook_id: item.notebook_id || null,
+    measurements: item.measurements || [],
+    notes: item.notes || null,
+  };
+}
+
+/**
+ * Validate sensor_payload (measurements array) items.
+ * Throws on invalid data.
+ */
+function validateSensorPayload(measurements) {
+  if (!measurements || !Array.isArray(measurements)) return;
+  for (const m of measurements) {
+    if (typeof m.value !== 'number' || isNaN(m.value)) {
+      throw new Error(`Invalid measurement value: ${m.value}. All values must be numeric.`);
+    }
+    if (m.sensor_id === undefined || m.sensor_id === null) {
+      throw new Error('Each measurement must have a sensor_id');
+    }
+  }
+}
+
+/**
  * @api {post} /api/measurements Create Measurement
  * @apiName CreateMeasurement
  * @apiGroup Measurements
- * @apiVersion 1.0.0
+ * @apiVersion 2.0.0
  *
- * @apiDescription Create a new measurement record with multiple sensors
+ * @apiDescription Create a new measurement. Supports idempotency via client_measurement_id.
  *
  * @apiHeader {String} Authorization Bearer JWT token
  *
- * @apiBody {String} [user_id] User ID (admin only - ignored for regular users)
- * @apiBody {String} [device_id] Device identifier (optional)
- * @apiBody {String} [timestamp] Measurement timestamp ISO8601 (defaults to server time)
- * @apiBody {Object} [location] Location object with lat and long
- * @apiBody {Number} [location.lat] Latitude coordinate (can be null)
- * @apiBody {Number} [location.long] Longitude coordinate (can be null)
+ * @apiBody {String} [client_measurement_id] Client-generated unique ID for idempotency
+ * @apiBody {String} [user_id] User ID (admin only)
+ * @apiBody {String} [device_id] Device identifier
+ * @apiBody {String} [timestamp] ISO8601 timestamp (defaults to server time)
+ * @apiBody {Number} [timestamp_device_ms] Device timestamp in milliseconds
+ * @apiBody {String} [source] Source of measurement (e.g. 'manual', 'ble', 'scheduled')
+ * @apiBody {Object} [location] Location {lat, long}
+ * @apiBody {Boolean} [location_used=false] Whether location was used
+ * @apiBody {Boolean} [capture_with_gps=false] Whether GPS was active during capture
+ * @apiBody {String} [notebook_id] Reference to a notebook
  * @apiBody {Object[]} measurements Array of sensor measurements
  * @apiBody {Number|String} measurements.sensor_id Sensor ID
- * @apiBody {Number} measurements.value Measurement value (must be numeric)
- * @apiBody {String} [notes] Optional notes or comments
+ * @apiBody {Number} measurements.value Measurement value
+ * @apiBody {String} [notes] Optional notes
  *
- * @apiParamExample {json} Request-Example:
- *     {
- *       "device_id": "ESP32-001",
- *       "timestamp": "2024-01-01T12:00:00.000Z",
- *       "location": {
- *         "lat": 40.7128,
- *         "long": -74.0060
- *       },
- *       "measurements": [
- *         { "sensor_id": 1, "value": 25.5 },
- *         { "sensor_id": 2, "value": 60.3 }
- *       ],
- *       "notes": "Morning reading"
- *     }
- *
+ * @apiSuccess (201) {String} status "inserted"
  * @apiSuccess (201) {Object} measurement Created measurement object
+ * @apiSuccess (200) {String} status "duplicated"
+ * @apiSuccess (200) {Object} measurement Existing measurement object
  *
- * @apiError (400) {String} error Validation error (e.g., non-numeric values)
- * @apiError (401) Unauthorized User not authenticated
+ * @apiError (400) {String} error Validation error
+ * @apiError (401) Unauthorized
  */
 exports.createMeasurement = async (req, res) => {
-  const { user_id, device_id, timestamp, location, measurements, notes } = req.body;
-
   try {
-    // Validate measurements have numeric values
-    if (measurements && Array.isArray(measurements)) {
-      for (const m of measurements) {
-        if (typeof m.value !== 'number' || isNaN(m.value)) {
-          return res.status(400).json({
-            error: `Invalid measurement value: ${m.value}. All values must be numeric.`
-          });
-        }
-        if (m.sensor_id === undefined || m.sensor_id === null) {
-          return res.status(400).json({
-            error: 'Each measurement must have a sensor_id'
-          });
-        }
+    validateSensorPayload(req.body.measurements);
+
+    const effectiveUserId = (req.user.role === 'admin' && req.body.user_id)
+      ? req.body.user_id
+      : req.user._id;
+
+    // Idempotency check
+    if (req.body.client_measurement_id) {
+      const existing = await Measurement.findOne({
+        user_id: effectiveUserId,
+        client_measurement_id: req.body.client_measurement_id
+      });
+      if (existing) {
+        return res.status(200).json({ status: 'duplicated', measurement: existing });
       }
     }
 
-    // Determine user_id: admin can specify, regular users use their own
-    const effectiveUserId = (req.user.role === 'admin' && user_id)
-      ? user_id
-      : req.user._id;
-
-    const measurement = new Measurement({
-      user_id: effectiveUserId,
-      device_id: device_id || null,
-      timestamp: timestamp ? new Date(timestamp) : new Date(),
-      location: location || { lat: null, long: null },
-      measurements: measurements || [],
-      notes: notes || null,
-    });
-
+    const measurement = new Measurement(buildMeasurementDoc(req.body, effectiveUserId));
     await measurement.save();
-    res.status(201).json(measurement);
+    res.status(201).json({ status: 'inserted', measurement });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -186,51 +200,28 @@ exports.createMeasurement = async (req, res) => {
  * @apiGroup Measurements
  * @apiVersion 1.0.0
  *
- * @apiDescription Get paginated measurements with optional filtering by time range, location, sensor, and user
+ * @apiDescription Get paginated measurements with optional filtering
  *
  * @apiHeader {String} Authorization Bearer JWT token
  *
- * @apiQuery {String} [from] Start timestamp for filtering (ISO 8601 format)
- * @apiQuery {String} [to] End timestamp for filtering (ISO 8601 format)
+ * @apiQuery {String} [from] Start timestamp (ISO 8601)
+ * @apiQuery {String} [to] End timestamp (ISO 8601)
  * @apiQuery {Number} [lat] Latitude for radius filtering
  * @apiQuery {Number} [lng] Longitude for radius filtering
- * @apiQuery {Number} [radius] Radius in km for location filtering
- * @apiQuery {Number} [radius_m] Radius in meters for location filtering (alternative to radius)
- * @apiQuery {String|Number} [sensorId] Filter by specific sensor ID
+ * @apiQuery {Number} [radius] Radius in km
+ * @apiQuery {Number} [radius_m] Radius in meters
+ * @apiQuery {String|Number} [sensorId] Filter by sensor ID
  * @apiQuery {String} [userId] Filter by user ID (admin only)
  * @apiQuery {Number} [page=1] Page number
  * @apiQuery {Number} [limit=20] Items per page
  *
- * @apiSuccess {Number} total Total number of measurements
+ * @apiSuccess {Number} total Total count
  * @apiSuccess {Number} page Current page
  * @apiSuccess {Number} limit Items per page
  * @apiSuccess {Object[]} measurements Array of measurement objects
  *
- * @apiSuccessExample {json} Success-Response:
- *     HTTP/1.1 200 OK
- *     {
- *       "total": 100,
- *       "page": 1,
- *       "limit": 20,
- *       "measurements": [
- *         {
- *           "_id": "507f1f77bcf86cd799439011",
- *           "user_id": "507f1f77bcf86cd799439012",
- *           "timestamp": "2024-01-01T12:00:00.000Z",
- *           "location": {
- *             "lat": 40.7128,
- *             "long": -74.0060
- *           },
- *           "measurements": [
- *             { "sensor_id": 1, "value": 25.5 },
- *             { "sensor_id": 2, "value": 60.3 }
- *           ]
- *         }
- *       ]
- *     }
- *
  * @apiError (500) {String} error Error message
- * @apiError (401) Unauthorized User not authenticated
+ * @apiError (401) Unauthorized
  */
 exports.getMeasurements = async (req, res) => {
   const { page = 1, limit = 20 } = req.query;
@@ -238,10 +229,8 @@ exports.getMeasurements = async (req, res) => {
   try {
     const query = buildMeasurementFilter(req);
 
-    // Contar total de documentos
     const total = await Measurement.countDocuments(query);
 
-    // Obtener mediciones paginadas
     const measurements = await Measurement.find(query)
       .sort({ timestamp: -1 })
       .skip((page - 1) * limit)
@@ -265,43 +254,12 @@ exports.getMeasurements = async (req, res) => {
  * @apiGroup Measurements
  * @apiVersion 1.0.0
  *
- * @apiDescription Get a specific measurement by ID
- *
  * @apiHeader {String} Authorization Bearer JWT token
- *
  * @apiParam {String} id Measurement ID
  *
  * @apiSuccess {Object} measurement Measurement object
- * @apiSuccess {String} measurement._id Measurement ID
- * @apiSuccess {String} measurement.user_id User ID
- * @apiSuccess {String} measurement.timestamp Measurement timestamp
- * @apiSuccess {Object} measurement.location Location object
- * @apiSuccess {Number} measurement.location.lat Latitude
- * @apiSuccess {Number} measurement.location.long Longitude
- * @apiSuccess {Object[]} measurement.measurements Array of sensor measurements
- * @apiSuccess {Mixed} measurement.measurements.sensor_id Sensor ID
- * @apiSuccess {Mixed} measurement.measurements.value Measurement value
- *
- * @apiSuccessExample {json} Success-Response:
- *     HTTP/1.1 200 OK
- *     {
- *       "_id": "507f1f77bcf86cd799439011",
- *       "user_id": "507f1f77bcf86cd799439012",
- *       "timestamp": "2024-01-01T12:00:00.000Z",
- *       "location": {
- *         "lat": 40.7128,
- *         "long": -74.0060
- *       },
- *       "measurements": [
- *         { "sensor_id": 1, "value": 25.5 },
- *         { "sensor_id": 2, "value": 60.3 }
- *       ]
- *     }
- *
- * @apiError (404) {String} message Measurement not found
- * @apiError (403) {String} message Not authorized to access this measurement
- * @apiError (500) {String} error Error message
- * @apiError (401) Unauthorized User not authenticated
+ * @apiError (404) {String} message Not found
+ * @apiError (403) {String} message Not authorized
  */
 exports.getMeasurementById = async (req, res) => {
   try {
@@ -311,7 +269,6 @@ exports.getMeasurementById = async (req, res) => {
       return res.status(404).json({ message: 'Medición no encontrada' });
     }
 
-    // Verificar que el usuario sea el dueño de la medición
     if (measurement.user_id.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'No autorizado para acceder a esta medición' });
     }
@@ -328,18 +285,12 @@ exports.getMeasurementById = async (req, res) => {
  * @apiGroup Measurements
  * @apiVersion 1.0.0
  *
- * @apiDescription Delete a specific measurement by ID
- *
  * @apiHeader {String} Authorization Bearer JWT token
- *
  * @apiParam {String} id Measurement ID
  *
- * @apiSuccess {String} message Success message
- *
- * @apiError (404) {String} message Measurement not found
- * @apiError (403) {String} message Not authorized to delete this measurement
- * @apiError (500) {String} error Error message
- * @apiError (401) Unauthorized User not authenticated
+ * @apiSuccess {String} message Success
+ * @apiError (404) {String} message Not found
+ * @apiError (403) {String} message Not authorized
  */
 exports.deleteMeasurement = async (req, res) => {
   try {
@@ -349,7 +300,6 @@ exports.deleteMeasurement = async (req, res) => {
       return res.status(404).json({ message: 'Medición no encontrada' });
     }
 
-    // Verificar que el usuario sea el dueño de la medición
     if (measurement.user_id.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'No autorizado para eliminar esta medición' });
     }
@@ -367,43 +317,21 @@ exports.deleteMeasurement = async (req, res) => {
  * @apiGroup Measurements
  * @apiVersion 1.0.0
  *
- * @apiDescription Delete multiple measurements matching the provided filters.
- * Uses the same filters as GET /api/measurements.
- * Requires confirmation header to prevent accidental deletions.
+ * @apiDescription Delete multiple measurements matching filters. Requires X-Confirm: true header.
  *
  * @apiHeader {String} Authorization Bearer JWT token
- * @apiHeader {String} X-Confirm Must be "true" to confirm deletion
+ * @apiHeader {String} X-Confirm Must be "true"
  *
- * @apiQuery {String} [from] Start timestamp (ISO 8601)
- * @apiQuery {String} [to] End timestamp (ISO 8601)
- * @apiQuery {Number} [lat] Latitude for radius filtering
- * @apiQuery {Number} [lng] Longitude for radius filtering
- * @apiQuery {Number} [radius] Radius in km
- * @apiQuery {Number} [radius_m] Radius in meters
- * @apiQuery {String|Number} [sensorId] Filter by sensor ID
- * @apiQuery {String} [userId] Filter by user ID (admin only)
- *
- * @apiSuccess {Number} deleted Number of measurements deleted
- *
- * @apiSuccessExample {json} Success-Response:
- *     HTTP/1.1 200 OK
- *     {
- *       "deleted": 15
- *     }
- *
- * @apiError (400) {String} error Missing confirmation header or no filters provided
- * @apiError (401) Unauthorized User not authenticated
- * @apiError (500) {String} error Error message
+ * @apiSuccess {Number} deleted Count deleted
+ * @apiError (400) {String} error Missing confirmation or filters
  */
 exports.deleteMeasurementsBulk = async (req, res) => {
-  // Require confirmation header
   if (req.headers['x-confirm'] !== 'true') {
     return res.status(400).json({
       error: 'Bulk delete requires confirmation. Set header X-Confirm: true'
     });
   }
 
-  // Require at least one filter
   const { from, to, lat, lng, radius, radius_m, sensorId, userId } = req.query;
   const hasFilter = from || to || (lat && lng && (radius || radius_m)) || sensorId || userId;
 
@@ -423,64 +351,38 @@ exports.deleteMeasurementsBulk = async (req, res) => {
 };
 
 /**
- * @api {post} /api/measurements/batch Create Batch Measurements
- * @apiName CreateBatchMeasurements
+ * @api {post} /api/measurements/bulk Create Bulk Measurements
+ * @apiName CreateBulkMeasurements
  * @apiGroup Measurements
- * @apiVersion 1.0.0
+ * @apiVersion 2.0.0
  *
- * @apiDescription Create multiple measurements in a single request (for offline sync)
+ * @apiDescription Create multiple measurements with idempotency support. Each item reports inserted|duplicated|failed.
  *
  * @apiHeader {String} Authorization Bearer JWT token
  *
- * @apiBody {Object[]} measurements Array of measurement objects (max 20)
- * @apiBody {String} [measurements.user_id] User ID (admin only)
+ * @apiBody {Object[]} measurements Array of measurement objects (max 50)
+ * @apiBody {String} [measurements.client_measurement_id] Client ID for idempotency
  * @apiBody {String} [measurements.device_id] Device identifier
  * @apiBody {String} [measurements.timestamp] ISO8601 timestamp
+ * @apiBody {Number} [measurements.timestamp_device_ms] Device timestamp ms
+ * @apiBody {String} [measurements.source] Source identifier
  * @apiBody {Object} [measurements.location] Location {lat, long}
- * @apiBody {Object[]} measurements.measurements Sensor readings array
+ * @apiBody {Boolean} [measurements.location_used] Whether location was used
+ * @apiBody {Boolean} [measurements.capture_with_gps] Whether GPS was active
+ * @apiBody {String} [measurements.notebook_id] Notebook reference
+ * @apiBody {Object[]} measurements.measurements Sensor readings [{sensor_id, value}]
  * @apiBody {String} [measurements.notes] Optional notes
  *
- * @apiParamExample {json} Request-Example:
- *     {
- *       "measurements": [
- *         {
- *           "device_id": "ESP32-001",
- *           "timestamp": "2024-01-01T12:00:00.000Z",
- *           "location": { "lat": 40.71, "long": -74.00 },
- *           "measurements": [{ "sensor_id": 1, "value": 25.5 }]
- *         },
- *         {
- *           "device_id": "ESP32-001",
- *           "timestamp": "2024-01-01T12:05:00.000Z",
- *           "measurements": [{ "sensor_id": 1, "value": 26.0 }]
- *         }
- *       ]
- *     }
+ * @apiSuccess (201) {Object[]} results Per-item results with status inserted|duplicated|failed
+ * @apiSuccess (201) {Object} summary Totals: total, inserted, duplicated, failed
  *
- * @apiSuccess (201) {Object[]} results Array of results per measurement
- * @apiSuccess (201) {Number} results.index Index in original array
- * @apiSuccess (201) {Boolean} results.success Whether insert succeeded
- * @apiSuccess (201) {String} [results.id] Created measurement ID (if success)
- * @apiSuccess (201) {String} [results.error] Error message (if failed)
- *
- * @apiSuccessExample {json} Success-Response:
- *     HTTP/1.1 201 Created
- *     {
- *       "results": [
- *         { "index": 0, "success": true, "id": "507f1f77bcf86cd799439011" },
- *         { "index": 1, "success": true, "id": "507f1f77bcf86cd799439012" }
- *       ],
- *       "summary": { "total": 2, "success": 2, "failed": 0 }
- *     }
- *
- * @apiError (400) {String} error Batch limit exceeded or invalid format
- * @apiError (401) Unauthorized User not authenticated
+ * @apiError (400) {String} error Invalid format or limit exceeded
+ * @apiError (401) Unauthorized
  */
-exports.createBatchMeasurements = async (req, res) => {
+exports.createBulkMeasurements = async (req, res) => {
   const { measurements } = req.body;
-  const BATCH_LIMIT = 20;
+  const BATCH_LIMIT = 50;
 
-  // Validate input
   if (!measurements || !Array.isArray(measurements)) {
     return res.status(400).json({ error: 'measurements must be an array' });
   }
@@ -496,54 +398,41 @@ exports.createBatchMeasurements = async (req, res) => {
   }
 
   const results = [];
-  let successCount = 0;
+  let insertedCount = 0;
+  let duplicatedCount = 0;
   let failedCount = 0;
 
   for (let i = 0; i < measurements.length; i++) {
     const item = measurements[i];
 
     try {
-      // Validate measurement values
-      if (item.measurements && Array.isArray(item.measurements)) {
-        for (const m of item.measurements) {
-          if (typeof m.value !== 'number' || isNaN(m.value)) {
-            throw new Error(`Invalid measurement value: ${m.value}. Must be numeric.`);
-          }
-          if (m.sensor_id === undefined || m.sensor_id === null) {
-            throw new Error('Each measurement must have a sensor_id');
-          }
-        }
-      }
+      validateSensorPayload(item.measurements);
 
-      // Determine user_id
       const effectiveUserId = (req.user.role === 'admin' && item.user_id)
         ? item.user_id
         : req.user._id;
 
-      const measurement = new Measurement({
-        user_id: effectiveUserId,
-        device_id: item.device_id || null,
-        timestamp: item.timestamp ? new Date(item.timestamp) : new Date(),
-        location: item.location || { lat: null, long: null },
-        measurements: item.measurements || [],
-        notes: item.notes || null,
-      });
+      // Idempotency check
+      if (item.client_measurement_id) {
+        const existing = await Measurement.findOne({
+          user_id: effectiveUserId,
+          client_measurement_id: item.client_measurement_id
+        });
+        if (existing) {
+          results.push({ index: i, status: 'duplicated', id: existing._id.toString() });
+          duplicatedCount++;
+          continue;
+        }
+      }
 
+      const measurement = new Measurement(buildMeasurementDoc(item, effectiveUserId));
       await measurement.save();
 
-      results.push({
-        index: i,
-        success: true,
-        id: measurement._id.toString()
-      });
-      successCount++;
+      results.push({ index: i, status: 'inserted', id: measurement._id.toString() });
+      insertedCount++;
 
     } catch (error) {
-      results.push({
-        index: i,
-        success: false,
-        error: error.message
-      });
+      results.push({ index: i, status: 'failed', error: error.message });
       failedCount++;
     }
   }
@@ -552,8 +441,12 @@ exports.createBatchMeasurements = async (req, res) => {
     results,
     summary: {
       total: measurements.length,
-      success: successCount,
+      inserted: insertedCount,
+      duplicated: duplicatedCount,
       failed: failedCount
     }
   });
 };
+
+// Keep backward compatibility alias
+exports.createBatchMeasurements = exports.createBulkMeasurements;
