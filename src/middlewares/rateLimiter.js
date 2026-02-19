@@ -41,10 +41,20 @@ const refreshLimiter = rateLimit({
   message: { error: 'Too many refresh attempts. Please try again later.' }
 });
 
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  keyGenerator: (req) => req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many password reset requests. Please try again later.' }
+});
+
 module.exports = {
   measurementPostLimiter,
   measurementBatchLimiter,
   measurementDeleteLimiter,
   loginLimiter,
-  refreshLimiter
+  refreshLimiter,
+  forgotPasswordLimiter
 };
