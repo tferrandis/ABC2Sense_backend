@@ -1,6 +1,10 @@
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/admin');
 const User = require('../models/user');
+const Measurement = require('../models/measurement');
+const Sensor = require('../models/sensor');
+const Firmware = require('../models/firmware');
+const RefreshToken = require('../models/refreshToken');
 const AuditLog = require('../models/auditLog');
 
 const getClientIp = (req) => req.ip || req.headers['x-forwarded-for'] || null;
@@ -499,6 +503,58 @@ exports.getAuditLogs = async (req, res) => {
       total,
       totalPages: Math.ceil(total / safeLimit),
       logs: items
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+// Dashboard KPIs + Health (admin only)
+exports.getDashboardKpis = async (req, res) => {
+  try {
+    const [
+      totalUsers,
+      totalAdmins,
+      totalMeasurements,
+      totalSensors,
+      totalFirmware,
+      activeRefreshTokens,
+      failedAuditEvents24h
+    ] = await Promise.all([
+      User.countDocuments(),
+      Admin.countDocuments(),
+      Measurement.countDocuments(),
+      Sensor.countDocuments(),
+      Firmware.countDocuments(),
+      RefreshToken.countDocuments({ revoked: false }),
+      AuditLog.countDocuments({
+        status: 'failure',
+        createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+      })
+    ]);
+
+    res.json({
+      success: true,
+      kpis: {
+        totals: {
+          users: totalUsers,
+          admins: totalAdmins,
+          measurements: totalMeasurements,
+          sensors: totalSensors,
+          firmware: totalFirmware,
+          activeSessions: activeRefreshTokens
+        },
+        health: {
+          status: 'ok',
+          failedAuditEvents24h,
+          serverTime: new Date().toISOString(),
+          uptimeSeconds: Math.floor(process.uptime())
+        }
+      }
     });
   } catch (error) {
     res.status(500).json({
