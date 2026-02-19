@@ -23,8 +23,28 @@ const measurementDeleteLimiter = createUserRateLimiter(
   parseInt(process.env.RATE_LIMIT_MEASUREMENTS_DELETE || '5')
 );
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Please try again later.' }
+});
+
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  keyGenerator: (req) => req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many refresh attempts. Please try again later.' }
+});
+
 module.exports = {
   measurementPostLimiter,
   measurementBatchLimiter,
-  measurementDeleteLimiter
+  measurementDeleteLimiter,
+  loginLimiter,
+  refreshLimiter
 };
