@@ -1,9 +1,34 @@
 const passport = require('passport');
 const User = require('../models/user');
+const RefreshToken = require('../models/refreshToken');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const Sensor = require('../models/sensor');
 const Measurement = require('../models/measurement');
 const { sendMail } = require('../services/mailer');
+
+const ACCESS_TOKEN_EXPIRY = '15m';
+const ACCESS_TOKEN_MS = 15 * 60 * 1000;
+const REFRESH_TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Generate an access token + refresh token pair and persist the refresh token hash.
+ */
+async function generateTokenPair(userId) {
+  const expirationDate = new Date(Date.now() + ACCESS_TOKEN_MS);
+  const accessToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
+
+  const rawRefreshToken = crypto.randomBytes(40).toString('hex');
+  const tokenHash = RefreshToken.hashToken(rawRefreshToken);
+
+  await RefreshToken.create({
+    userId,
+    tokenHash,
+    expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS)
+  });
+
+  return { accessToken, refreshToken: rawRefreshToken, expiresAt: expirationDate.toISOString() };
+}
 
 /**
  * @api {post} /api/auth/register Register User
@@ -18,77 +43,41 @@ const { sendMail } = require('../services/mailer');
  * @apiBody {String} password User's password (min 8 chars, 1 uppercase, 1 special char)
  *
  * @apiSuccess (201) {Object} user User information
- * @apiSuccess (201) {String} user._id User ID
- * @apiSuccess (201) {String} user.username Username
- * @apiSuccess (201) {String} user.email Email address
- * @apiSuccess (201) {String} user.role User role (default: "user")
- * @apiSuccess (201) {Boolean} user.emailVerified Email verification status (default: false)
- * @apiSuccess (201) {String} accessToken JWT access token (8h expiration)
- * @apiSuccess (201) {String} refreshToken JWT refresh token (7d expiration)
+ * @apiSuccess (201) {String} accessToken JWT access token (15m expiration)
+ * @apiSuccess (201) {String} refreshToken Refresh token (7d expiration)
  * @apiSuccess (201) {String} expiresAt Access token expiration timestamp
  *
- * @apiSuccessExample {json} Success-Response:
- *     HTTP/1.1 201 Created
- *     {
- *       "user": {
- *         "_id": "507f1f77bcf86cd799439011",
- *         "username": "johndoe",
- *         "email": "john@example.com",
- *         "role": "user",
- *         "emailVerified": false
- *       },
- *       "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
- *       "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
- *       "expiresAt": "2024-01-01T20:00:00.000Z"
- *     }
- *
- * @apiError (400) {String} message Email already registered
- * @apiError (400) {String} message Username already taken
- * @apiError (400) {Array} errors Validation errors
+ * @apiError (400) {String} message Email already registered / Username already taken
  * @apiError (500) {String} message Server error
  */
 exports.register = async (req, res) => {
   const { username, email, password } = req.body;
 
   try {
-    // Check for existing email
     const existingEmail = await User.findOne({ email });
     if (existingEmail) {
       return res.status(400).json({ message: 'Email already registered' });
     }
 
-    // Check for existing username
     const existingUsername = await User.findOne({ username });
     if (existingUsername) {
       return res.status(400).json({ message: 'Username already taken' });
     }
 
-    // Create user (role defaults to 'user', emailVerified defaults to false)
     const user = new User({ username, email, password });
     await user.save();
 
-    // Generate access token (8h expiration)
-    const accessTokenExpiresIn = '8h';
-    const expirationDate = new Date(Date.now() + 8 * 60 * 60 * 1000);
-    const accessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: accessTokenExpiresIn });
-
-    // Generate refresh token (7d expiration)
-    const refreshToken = jwt.sign({ id: user._id, type: 'refresh' }, process.env.JWT_SECRET, { expiresIn: '7d' });
-
-    // Return user data without password
-    const userResponse = {
-      _id: user._id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      emailVerified: user.emailVerified
-    };
+    const tokens = await generateTokenPair(user._id);
 
     res.status(201).json({
-      user: userResponse,
-      accessToken,
-      refreshToken,
-      expiresAt: expirationDate.toISOString()
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        emailVerified: user.emailVerified
+      },
+      ...tokens
     });
   } catch (error) {
     res.status(500).json({ message: 'Error registering user', error: error.message });
@@ -101,76 +90,168 @@ exports.register = async (req, res) => {
  * @apiGroup Authentication
  * @apiVersion 1.0.0
  *
- * @apiDescription Authenticate user and receive JWT token
+ * @apiDescription Authenticate user and receive access + refresh tokens
  *
- * @apiBody {String} email User's email address
+ * @apiBody {String} identifier User's email or username
  * @apiBody {String} password User's password
  *
  * @apiSuccess {Object} user User information
- * @apiSuccess {String} token JWT authentication token
- * @apiSuccess {String} expiresAt Token expiration timestamp
+ * @apiSuccess {String} accessToken JWT access token (15m expiration)
+ * @apiSuccess {String} refreshToken Refresh token (7d expiration)
+ * @apiSuccess {String} expiresAt Access token expiration timestamp
  *
- * @apiSuccessExample {json} Success-Response:
- *     HTTP/1.1 200 OK
- *     {
- *       "user": {
- *         "_id": "507f1f77bcf86cd799439011",
- *         "username": "johndoe",
- *         "email": "john@example.com"
- *       },
- *       "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
- *       "expiresAt": "2024-01-01T12:00:00.000Z"
- *     }
- *
- * @apiError (400) {String} message Invalid credentials message
- * @apiError (500) {String} message Server error message
+ * @apiError (400) {String} message Invalid credentials
+ * @apiError (429) {String} error Too many login attempts
+ * @apiError (500) {String} message Server error
  */
 exports.login = (req, res, next) => {
-  console.log("🔍 Datos recibidos:", req.body); 
-
-  passport.authenticate('local', { session: false }, (err, user, info) => {
+  passport.authenticate('local', { session: false }, async (err, user, info) => {
     if (err) {
-      console.error("🚨 Error en Passport:", err);
-      return res.status(500).json({ message: 'Server error', err });
+      return res.status(500).json({ message: 'Server error', error: err.message });
     }
 
     if (!user) {
-      console.warn("⚠️ Usuario no encontrado o credenciales incorrectas:", info);
       return res.status(400).json({ message: 'Credenciales inválidas', info });
     }
 
-    req.login(user, { session: false }, async (err) => {
-      if (err) {
-        console.error("🚨 Error en login:", err);
-        return res.status(500).send(err);
-      }
-
-      console.log("✅ Login exitoso para:", user.username);
-
-      // Definir duración y caducidad
-      const expiresIn = '8h';
-      const expirationDate = new Date(Date.now() + 8 * 60 * 60 * 1000); 
-
-      // Generar token
-      const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn });
+    try {
+      const tokens = await generateTokenPair(user._id);
 
       return res.json({
-        user,
-        token,
-        expiresAt: expirationDate.toISOString() 
+        user: {
+          _id: user._id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          emailVerified: user.emailVerified
+        },
+        ...tokens
       });
-    });
+    } catch (error) {
+      return res.status(500).json({ message: 'Error generating tokens', error: error.message });
+    }
   })(req, res, next);
 };
 
+/**
+ * @api {post} /api/auth/refresh Refresh Tokens
+ * @apiName RefreshTokens
+ * @apiGroup Authentication
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Rotate refresh token and get a new access + refresh token pair
+ *
+ * @apiBody {String} refreshToken Current valid refresh token
+ *
+ * @apiSuccess {String} accessToken New JWT access token
+ * @apiSuccess {String} refreshToken New refresh token
+ * @apiSuccess {String} expiresAt Access token expiration timestamp
+ *
+ * @apiError (401) {String} message Invalid or expired refresh token
+ * @apiError (429) {String} error Too many refresh attempts
+ */
+exports.refresh = async (req, res) => {
+  const { refreshToken } = req.body;
+
+  try {
+    const tokenHash = RefreshToken.hashToken(refreshToken);
+    const storedToken = await RefreshToken.findOne({
+      tokenHash,
+      revoked: false,
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (!storedToken) {
+      return res.status(401).json({ message: 'Invalid or expired refresh token' });
+    }
+
+    // Revoke old token
+    storedToken.revoked = true;
+    await storedToken.save();
+
+    // Generate new pair
+    const tokens = await generateTokenPair(storedToken.userId);
+
+    res.json(tokens);
+  } catch (error) {
+    res.status(500).json({ message: 'Error refreshing token', error: error.message });
+  }
+};
+
+/**
+ * @api {post} /api/auth/logout Logout
+ * @apiName LogoutUser
+ * @apiGroup Authentication
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Revoke the current refresh token to end the session
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ * @apiBody {String} refreshToken Refresh token to revoke
+ *
+ * @apiSuccess {String} message Logged out successfully
+ *
+ * @apiError (401) Unauthorized User not authenticated
+ */
+exports.logout = async (req, res) => {
+  const { refreshToken } = req.body;
+
+  try {
+    const tokenHash = RefreshToken.hashToken(refreshToken);
+    const storedToken = await RefreshToken.findOne({
+      tokenHash,
+      userId: req.user._id,
+      revoked: false
+    });
+
+    if (storedToken) {
+      storedToken.revoked = true;
+      await storedToken.save();
+    }
+
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error logging out', error: error.message });
+  }
+};
+
+/**
+ * @api {get} /api/auth/me Get Current User
+ * @apiName GetMe
+ * @apiGroup Authentication
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Get the authenticated user's profile
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiSuccess {String} _id User ID
+ * @apiSuccess {String} username Username
+ * @apiSuccess {String} email Email
+ * @apiSuccess {String} role User role
+ * @apiSuccess {Boolean} emailVerified Email verification status
+ * @apiSuccess {String} registrationDate Registration date
+ *
+ * @apiError (401) Unauthorized User not authenticated
+ */
+exports.me = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('-password -__v');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching user', error: error.message });
+  }
+};
 
 exports.deleteAccount = async (req, res) => {
   try {
     await Sensor.deleteMany({ user: req.user._id });
-
     await Measurement.deleteMany({ user_id: req.user._id });
-
-        await User.findByIdAndDelete(req.user._id);
+    await RefreshToken.deleteMany({ userId: req.user._id });
+    await User.findByIdAndDelete(req.user._id);
 
     res.json({ message: 'User and related data deleted successfully' });
   } catch (err) {
@@ -185,7 +266,6 @@ exports.forgotPassword = async (req, res) => {
   if (!user) return res.status(404).json({ message: 'User not found' });
 
   const token = crypto.randomBytes(32).toString('hex');
-  resetTokens.set(token, user._id);
 
   const resetUrl = `test`;
 
@@ -197,6 +277,3 @@ exports.forgotPassword = async (req, res) => {
 
   res.json({ message: 'Reset link sent to email' });
 };
-
-
-

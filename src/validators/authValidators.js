@@ -35,8 +35,18 @@ const validateRegister = [
     next();
   }
 ];
+const refreshValidator = [
+  check('refreshToken').notEmpty().withMessage('refreshToken is required'),
+];
+
+const logoutValidator = [
+  check('refreshToken').notEmpty().withMessage('refreshToken is required'),
+];
+
 module.exports = {
   validateRegister,
   loginValidator,
+  refreshValidator,
+  logoutValidator,
   validateResult
 };
