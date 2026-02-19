@@ -8,7 +8,10 @@ const { measurementPostLimiter, measurementBatchLimiter, measurementDeleteLimite
 // Crear una medición con validadores + rate limiting
 router.post('/', passport.authenticate('jwt', { session: false }), measurementPostLimiter, measurementValidator, validateResult, measurementController.createMeasurement);
 
-// Crear múltiples mediciones en batch (para sync offline) + rate limiting
+// Crear múltiples mediciones en bulk (para sync offline) + rate limiting
+router.post('/bulk', passport.authenticate('jwt', { session: false }), measurementBatchLimiter, measurementController.createBulkMeasurements);
+
+// Backward compatibility alias
 router.post('/batch', passport.authenticate('jwt', { session: false }), measurementBatchLimiter, measurementController.createBatchMeasurements);
 
 // Obtener mediciones del usuario autenticado con filtros opcionales
