@@ -17,6 +17,9 @@ router.post('/batch', passport.authenticate('jwt', { session: false }), measurem
 // Obtener mediciones del usuario autenticado con filtros opcionales
 router.get('/', passport.authenticate('jwt', { session: false }), measurementController.getMeasurements);
 
+// Reasignar mediciones en bulk (admin, requiere X-Confirm: true)
+router.patch('/reassign', passport.authenticate('jwt', { session: false }), measurementController.reassignMeasurementsBulk);
+
 // Obtener una medición específica por ID
 router.get('/:id', passport.authenticate('jwt', { session: false }), measurementController.getMeasurementById);
 

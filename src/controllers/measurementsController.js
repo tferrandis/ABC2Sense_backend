@@ -1,4 +1,5 @@
 const Measurement = require('../models/measurement');
+const User = require('../models/user');
 
 const R = 6371; // Radio de la Tierra en km
 
@@ -347,6 +348,81 @@ exports.deleteMeasurementsBulk = async (req, res) => {
     res.status(200).json({ deleted: result.deletedCount });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * @api {patch} /api/measurements/reassign Reassign Measurements (Admin)
+ * @apiName ReassignMeasurements
+ * @apiGroup Measurements
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Reassign measurement ownership in bulk. Requires admin role and X-Confirm: true.
+ *
+ * @apiHeader {String} Authorization Bearer JWT token (admin)
+ * @apiHeader {String} X-Confirm Must be "true"
+ *
+ * @apiBody {String} targetUserId Destination user ID
+ * @apiBody {String[]} [measurementIds] Explicit measurement IDs to reassign
+ *
+ * @apiQuery {String} [from] Start timestamp (ISO 8601)
+ * @apiQuery {String} [to] End timestamp (ISO 8601)
+ * @apiQuery {Number} [lat] Latitude for radius filtering
+ * @apiQuery {Number} [lng] Longitude for radius filtering
+ * @apiQuery {Number} [radius] Radius in km
+ * @apiQuery {Number} [radius_m] Radius in meters
+ * @apiQuery {String|Number} [sensorId] Filter by sensor ID
+ * @apiQuery {String} [userId] Source owner user ID (admin only)
+ *
+ * @apiSuccess {Number} matched Count of measurements matched by selector
+ * @apiSuccess {Number} modified Count of measurements reassigned
+ */
+exports.reassignMeasurementsBulk = async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Only admins can reassign measurements' });
+  }
+
+  if (req.headers['x-confirm'] !== 'true') {
+    return res.status(400).json({
+      error: 'Bulk reassign requires confirmation. Set header X-Confirm: true'
+    });
+  }
+
+  const { targetUserId, measurementIds } = req.body || {};
+  if (!targetUserId) {
+    return res.status(400).json({ error: 'targetUserId is required' });
+  }
+
+  try {
+    const targetUser = await User.findById(targetUserId).select('_id');
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Target user not found' });
+    }
+
+    const { from, to, lat, lng, radius, radius_m, sensorId, userId } = req.query;
+    const hasFilter = from || to || (lat && lng && (radius || radius_m)) || sensorId || userId;
+    const hasMeasurementIds = Array.isArray(measurementIds) && measurementIds.length > 0;
+
+    if (!hasFilter && !hasMeasurementIds) {
+      return res.status(400).json({
+        error: 'At least one selector is required: measurementIds or filters (from,to,sensorId,lat/lng/radius,userId)'
+      });
+    }
+
+    const baseQuery = hasFilter ? buildMeasurementFilter(req) : {};
+    const query = hasMeasurementIds
+      ? { $and: [baseQuery, { _id: { $in: measurementIds } }] }
+      : baseQuery;
+
+    const result = await Measurement.updateMany(query, { $set: { user_id: targetUserId } });
+
+    return res.status(200).json({
+      matched: result.matchedCount,
+      modified: result.modifiedCount,
+      targetUserId
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 };
 
