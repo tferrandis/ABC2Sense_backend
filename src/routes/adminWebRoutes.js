@@ -4,7 +4,7 @@ const adminController = require('../controllers/adminController');
 const adminWebController = require('../controllers/adminWebController');
 const adminAuth = require('../middleware/adminAuth');
 
-router.get('/bootstrap', (req, res) => {
+router.get('/bootstrap', (_req, res) => {
   res.json({
     success: true,
     app: {
@@ -16,7 +16,7 @@ router.get('/bootstrap', (req, res) => {
       loginEndpoint: '/api/admin-web/auth/login',
       meEndpoint: '/api/admin-web/auth/me'
     },
-    modules: ['dashboard', 'users', 'subscriptions']
+    modules: ['dashboard', 'users', 'subscriptions', 'sensors', 'firmware', 'audit']
   });
 });
 
@@ -41,5 +41,16 @@ router.get('/subscriptions', adminAuth, adminWebController.listSubscriptions);
 router.post('/subscriptions', adminAuth, adminWebController.createSubscription);
 router.patch('/subscriptions/:id', adminAuth, adminWebController.updateSubscription);
 router.post('/subscriptions/:id/cancel', adminAuth, adminWebController.cancelSubscription);
+
+router.get('/sensors', adminAuth, adminWebController.listSensorDefinitions);
+router.post('/sensors', adminAuth, adminWebController.createSensorDefinition);
+router.patch('/sensors/:id', adminAuth, adminWebController.updateSensorDefinition);
+router.patch('/sensors/:id/enabled', adminAuth, adminWebController.setSensorDefinitionEnabled);
+
+router.get('/firmware', adminAuth, adminWebController.listFirmware);
+router.post('/firmware', adminAuth, adminWebController.uploadFirmware);
+router.patch('/firmware/:id/enabled', adminAuth, adminWebController.setFirmwareEnabled);
+
+router.get('/audit', adminAuth, adminWebController.listAuditLogs);
 
 module.exports = router;
