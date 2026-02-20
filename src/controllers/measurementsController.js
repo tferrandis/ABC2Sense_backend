@@ -320,6 +320,104 @@ exports.getMeasurements = async (req, res) => {
 };
 
 /**
+ * @api {get} /api/measurements/export Export Measurements
+ * @apiName ExportMeasurements
+ * @apiGroup Measurements
+ * @apiVersion 1.0.0
+ *
+ * @apiDescription Export filtered measurements in JSON or CSV format.
+ *
+ * @apiHeader {String} Authorization Bearer JWT token
+ *
+ * @apiQuery {String="json","csv","xlsx"} [format=json] Export format
+ * @apiQuery {String} [from] Start timestamp (ISO 8601)
+ * @apiQuery {String} [to] End timestamp (ISO 8601)
+ * @apiQuery {Number} [lat] Latitude for radius filtering
+ * @apiQuery {Number} [lng] Longitude for radius filtering
+ * @apiQuery {Number} [radius] Radius in km
+ * @apiQuery {Number} [radius_m] Radius in meters
+ * @apiQuery {String|Number} [sensorId] Filter by sensor ID
+ * @apiQuery {String} [userId] Filter by user ID (admin only)
+ */
+exports.exportMeasurements = async (req, res) => {
+  try {
+    const format = (req.query.format || 'json').toLowerCase();
+    const query = buildMeasurementFilter(req);
+
+    const measurements = await Measurement.find(query)
+      .sort({ timestamp: -1 })
+      .lean();
+
+    if (format === 'xlsx') {
+      return res.status(501).json({
+        error: 'XLSX export is not available yet. Use format=json or format=csv.'
+      });
+    }
+
+    if (format === 'csv') {
+      const headers = [
+        'id',
+        'user_id',
+        'device_id',
+        'timestamp',
+        'timestamp_device_ms',
+        'source',
+        'location_lat',
+        'location_long',
+        'location_used',
+        'capture_with_gps',
+        'notebook_id',
+        'notes',
+        'measurements_json'
+      ];
+
+      const escapeCsv = (value) => {
+        if (value === null || value === undefined) return '';
+        const str = String(value).replace(/"/g, '""');
+        return /[",\n]/.test(str) ? `"${str}"` : str;
+      };
+
+      const lines = [headers.join(',')];
+
+      for (const m of measurements) {
+        const row = [
+          m._id,
+          m.user_id,
+          m.device_id,
+          m.timestamp ? new Date(m.timestamp).toISOString() : '',
+          m.timestamp_device_ms,
+          m.source,
+          m.location?.lat,
+          m.location?.long,
+          m.location_used,
+          m.capture_with_gps,
+          m.notebook_id,
+          m.notes,
+          JSON.stringify(m.measurements || [])
+        ].map(escapeCsv);
+
+        lines.push(row.join(','));
+      }
+
+      const csv = lines.join('\n');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="measurements-export.csv"');
+      return res.status(200).send(csv);
+    }
+
+    // Default JSON export
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    return res.status(200).json({
+      format: 'json',
+      total: measurements.length,
+      measurements
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+/**
  * @api {get} /api/measurements/:id Get Measurement by ID
  * @apiName GetMeasurementById
  * @apiGroup Measurements
