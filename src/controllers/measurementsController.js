@@ -100,6 +100,49 @@ function buildMeasurementFilter(req) {
   return query;
 }
 
+function validateMeasurementFilterInputs(req) {
+  const { from, to, lat, lng, radius, radius_m, userId } = req.query;
+
+  if (from && Number.isNaN(Date.parse(from))) {
+    throw new Error('from must be a valid ISO8601 date');
+  }
+
+  if (to && Number.isNaN(Date.parse(to))) {
+    throw new Error('to must be a valid ISO8601 date');
+  }
+
+  if (from && to && new Date(from) > new Date(to)) {
+    throw new Error('from must be less than or equal to to');
+  }
+
+  if ((lat && !lng) || (!lat && lng)) {
+    throw new Error('lat and lng must be provided together');
+  }
+
+  if ((radius && radius_m) || ((lat || lng) && !(radius || radius_m))) {
+    throw new Error('Use either radius or radius_m with lat/lng');
+  }
+
+  if (radius && (!(parseFloat(radius) > 0))) {
+    throw new Error('radius must be a positive number');
+  }
+
+  if (radius_m && (!(parseFloat(radius_m) > 0))) {
+    throw new Error('radius_m must be a positive number');
+  }
+
+  if (req.user.role === 'admin' && userId && !mongoose.Types.ObjectId.isValid(userId)) {
+    throw new Error('userId must be a valid ObjectId');
+  }
+}
+
+function hasScopedFilter(req) {
+  const { from, to, lat, lng, radius, radius_m, sensorId, userId } = req.query;
+  const hasGeo = Boolean(lat && lng && (radius || radius_m));
+  const hasAdminUserId = req.user.role === 'admin' && Boolean(userId);
+  return Boolean(from || to || sensorId || hasGeo || hasAdminUserId);
+}
+
 /**
  * Build a measurement document from request item fields.
  */
@@ -229,24 +272,38 @@ exports.getMeasurements = async (req, res) => {
   const { page = 1, limit = 20 } = req.query;
 
   try {
+    validateMeasurementFilterInputs(req);
+
+    const pageNumber = parseInt(page, 10);
+    const limitNumber = parseInt(limit, 10);
+
+    if (Number.isNaN(pageNumber) || pageNumber < 1) {
+      return res.status(400).json({ error: 'page must be an integer >= 1' });
+    }
+
+    if (Number.isNaN(limitNumber) || limitNumber < 1 || limitNumber > 200) {
+      return res.status(400).json({ error: 'limit must be an integer between 1 and 200' });
+    }
+
     const query = buildMeasurementFilter(req);
 
     const total = await Measurement.countDocuments(query);
 
     const measurements = await Measurement.find(query)
       .sort({ timestamp: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
+      .skip((pageNumber - 1) * limitNumber)
+      .limit(limitNumber);
 
     res.status(200).json({
       total,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      totalPages: Math.ceil(total / limit),
+      page: pageNumber,
+      limit: limitNumber,
+      totalPages: Math.ceil(total / limitNumber),
       measurements
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    const status = /must be|Use either|provided together|less than/.test(error.message) ? 400 : 500;
+    res.status(status).json({ error: error.message });
   }
 };
 
@@ -265,13 +322,17 @@ exports.getMeasurements = async (req, res) => {
  */
 exports.getMeasurementById = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'id must be a valid ObjectId' });
+    }
+
     const measurement = await Measurement.findById(req.params.id);
 
     if (!measurement) {
       return res.status(404).json({ message: 'Medición no encontrada' });
     }
 
-    if (measurement.user_id.toString() !== req.user._id.toString()) {
+    if (req.user.role !== 'admin' && measurement.user_id.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'No autorizado para acceder a esta medición' });
     }
 
@@ -296,13 +357,17 @@ exports.getMeasurementById = async (req, res) => {
  */
 exports.deleteMeasurement = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'id must be a valid ObjectId' });
+    }
+
     const measurement = await Measurement.findById(req.params.id);
 
     if (!measurement) {
       return res.status(404).json({ message: 'Medición no encontrada' });
     }
 
-    if (measurement.user_id.toString() !== req.user._id.toString()) {
+    if (req.user.role !== 'admin' && measurement.user_id.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'No autorizado para eliminar esta medición' });
     }
 
@@ -334,16 +399,15 @@ exports.deleteMeasurementsBulk = async (req, res) => {
     });
   }
 
-  const { from, to, lat, lng, radius, radius_m, sensorId, userId } = req.query;
-  const hasFilter = from || to || (lat && lng && (radius || radius_m)) || sensorId || userId;
-
-  if (!hasFilter) {
-    return res.status(400).json({
-      error: 'At least one filter is required for bulk delete (from, to, sensorId, lat/lng/radius, userId)'
-    });
-  }
-
   try {
+    validateMeasurementFilterInputs(req);
+
+    if (!hasScopedFilter(req)) {
+      return res.status(400).json({
+        error: 'At least one scoped filter is required for bulk delete (from, to, sensorId, lat/lng/radius, userId for admin)'
+      });
+    }
+
     const query = buildMeasurementFilter(req);
     const result = await Measurement.deleteMany(query);
     res.status(200).json({ deleted: result.deletedCount });
@@ -404,8 +468,9 @@ exports.reassignMeasurementsBulk = async (req, res) => {
       return res.status(404).json({ error: 'Target user not found' });
     }
 
-    const { from, to, lat, lng, radius, radius_m, sensorId, userId } = req.query;
-    const hasFilter = from || to || (lat && lng && (radius || radius_m)) || sensorId || userId;
+    validateMeasurementFilterInputs(req);
+
+    const hasFilter = hasScopedFilter(req);
     const hasMeasurementIds = Array.isArray(measurementIds) && measurementIds.length > 0;
 
     if (hasMeasurementIds) {
