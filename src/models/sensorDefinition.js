@@ -11,7 +11,9 @@ const SensorDefinitionSchema = new Schema({
     required: true,
     enum: ["device", "backend", "manual"]
   },
-  enabled: { type: Boolean, default: true }
+  decimals: { type: Number, required: true, min: 0, max: 9, default: 2 },
+  enabled: { type: Boolean, default: true },
+  catalogVersion: { type: Number, required: true, default: 1, min: 1 }
 }, {
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
 });

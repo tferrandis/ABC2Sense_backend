@@ -14,6 +14,7 @@ app.use(passport.initialize());
 // Import new routes
 const adminRoutes = require('./routes/adminRoutes');
 const firmwareRoutes = require('./routes/firmwareRoutes');
+const adminSensorRoutes = require('./routes/adminSensorRoutes');
 
 console.log("Connecting to mongodb...");
 
@@ -41,6 +42,8 @@ console.log("Connecting to mongodb...");
         // Register admin and firmware routes
         app.use('/api/auth', adminRoutes);
         app.use('/api/firmware', firmwareRoutes);
+        app.use('/api/v1/admin/sensors', adminSensorRoutes);
+        app.use('/api/admin/sensors', adminSensorRoutes);
 
         // Auto-load other routes
         const routesPath = path.join(__dirname, 'routes');
