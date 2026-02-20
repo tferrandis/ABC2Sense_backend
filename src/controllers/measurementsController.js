@@ -101,7 +101,7 @@ function buildMeasurementFilter(req) {
 }
 
 function validateMeasurementFilterInputs(req) {
-  const { from, to, lat, lng, radius, radius_m, userId } = req.query;
+  const { from, to, lat, lng, radius, radius_m, userId, sensorId } = req.query;
 
   if (from && Number.isNaN(Date.parse(from))) {
     throw new Error('from must be a valid ISO8601 date');
@@ -123,12 +123,24 @@ function validateMeasurementFilterInputs(req) {
     throw new Error('Use either radius or radius_m with lat/lng');
   }
 
+  if (lat && (Number.isNaN(parseFloat(lat)) || parseFloat(lat) < -90 || parseFloat(lat) > 90)) {
+    throw new Error('lat must be a number between -90 and 90');
+  }
+
+  if (lng && (Number.isNaN(parseFloat(lng)) || parseFloat(lng) < -180 || parseFloat(lng) > 180)) {
+    throw new Error('lng must be a number between -180 and 180');
+  }
+
   if (radius && (!(parseFloat(radius) > 0))) {
     throw new Error('radius must be a positive number');
   }
 
   if (radius_m && (!(parseFloat(radius_m) > 0))) {
     throw new Error('radius_m must be a positive number');
+  }
+
+  if (sensorId !== undefined && sensorId !== null && `${sensorId}`.trim() === '') {
+    throw new Error('sensorId cannot be empty');
   }
 
   if (req.user.role === 'admin' && userId && !mongoose.Types.ObjectId.isValid(userId)) {
