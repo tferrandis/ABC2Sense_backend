@@ -513,6 +513,95 @@ exports.getAuditLogs = async (req, res) => {
   }
 };
 
+// Device inventory from measurements (admin only)
+exports.getDevicesInventory = async (req, res) => {
+  try {
+    const {
+      q,
+      userId,
+      from,
+      to,
+      page = 1,
+      limit = 25
+    } = req.query;
+
+    const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 100);
+    const safePage = Math.max(parseInt(page, 10) || 1, 1);
+
+    const match = {
+      device_id: { $exists: true, $ne: null, $ne: '' }
+    };
+
+    if (userId) {
+      match.user_id = userId;
+    }
+
+    if (q) {
+      match.device_id = { $regex: q, $options: 'i' };
+    }
+
+    if (from || to) {
+      match.timestamp = {};
+      if (from) match.timestamp.$gte = new Date(from);
+      if (to) match.timestamp.$lte = new Date(to);
+    }
+
+    const [result] = await Measurement.aggregate([
+      { $match: match },
+      { $sort: { timestamp: -1 } },
+      {
+        $group: {
+          _id: '$device_id',
+          userId: { $first: '$user_id' },
+          totalMeasurements: { $sum: 1 },
+          firstSeenAt: { $min: '$timestamp' },
+          lastSeenAt: { $max: '$timestamp' },
+          lastSource: { $first: '$source' },
+          lastLocation: { $first: '$location' }
+        }
+      },
+      { $sort: { lastSeenAt: -1 } },
+      {
+        $facet: {
+          rows: [
+            { $skip: (safePage - 1) * safeLimit },
+            { $limit: safeLimit }
+          ],
+          total: [
+            { $count: 'count' }
+          ]
+        }
+      }
+    ]);
+
+    const rows = (result && result.rows) || [];
+    const total = (result && result.total && result.total[0] && result.total[0].count) || 0;
+
+    res.json({
+      success: true,
+      page: safePage,
+      limit: safeLimit,
+      total,
+      totalPages: Math.ceil(total / safeLimit),
+      devices: rows.map((row) => ({
+        deviceId: row._id,
+        userId: row.userId,
+        totalMeasurements: row.totalMeasurements,
+        firstSeenAt: row.firstSeenAt,
+        lastSeenAt: row.lastSeenAt,
+        lastSource: row.lastSource || null,
+        lastLocation: row.lastLocation || null
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
 // Dashboard KPIs + Health (admin only)
 exports.getDashboardKpis = async (req, res) => {
   try {
