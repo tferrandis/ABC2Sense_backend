@@ -412,7 +412,8 @@ exports.deleteMeasurementsBulk = async (req, res) => {
     const result = await Measurement.deleteMany(query);
     res.status(200).json({ deleted: result.deletedCount });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    const status = /must be|Use either|provided together|less than/.test(error.message) ? 400 : 500;
+    res.status(status).json({ error: error.message });
   }
 };
 
@@ -499,7 +500,8 @@ exports.reassignMeasurementsBulk = async (req, res) => {
       targetUserId
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    const status = /must be|Use either|provided together|less than/.test(error.message) ? 400 : 500;
+    return res.status(status).json({ error: error.message });
   }
 };
 
