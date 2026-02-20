@@ -14,6 +14,7 @@ router.get('/stats', adminAuth, adminController.getStats);
 router.get('/profile', adminAuth, adminController.getProfile);
 router.post('/create', adminAuth, adminController.createAdmin);
 router.get('/audit-logs', adminAuth, adminController.getAuditLogs);
+router.get('/devices', adminAuth, adminController.getDevicesInventory);
 router.get('/dashboard-kpis', adminAuth, adminController.getDashboardKpis);
 
 module.exports = router;
