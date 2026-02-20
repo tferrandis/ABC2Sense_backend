@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
+const adminWebController = require('../controllers/adminWebController');
 const adminAuth = require('../middleware/adminAuth');
 
 router.get('/bootstrap', (req, res) => {
@@ -15,7 +16,7 @@ router.get('/bootstrap', (req, res) => {
       loginEndpoint: '/api/admin-web/auth/login',
       meEndpoint: '/api/admin-web/auth/me'
     },
-    modules: ['dashboard']
+    modules: ['dashboard', 'users', 'subscriptions']
   });
 });
 
@@ -31,5 +32,14 @@ router.get('/auth/me', adminAuth, (req, res) => {
     }
   });
 });
+
+router.get('/users', adminAuth, adminWebController.listUsers);
+router.get('/users/:id', adminAuth, adminWebController.getUser);
+router.patch('/users/:id', adminAuth, adminWebController.updateUser);
+
+router.get('/subscriptions', adminAuth, adminWebController.listSubscriptions);
+router.post('/subscriptions', adminAuth, adminWebController.createSubscription);
+router.patch('/subscriptions/:id', adminAuth, adminWebController.updateSubscription);
+router.post('/subscriptions/:id/cancel', adminAuth, adminWebController.cancelSubscription);
 
 module.exports = router;

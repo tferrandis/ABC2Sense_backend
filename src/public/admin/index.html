@@ -5,15 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ABC2Sense Admin</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+    body { font-family: Arial, sans-serif; max-width: 860px; margin: 40px auto; padding: 0 16px; }
     .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-    input { width: 100%; padding: 8px; margin: 6px 0 12px; }
-    button { padding: 8px 14px; cursor: pointer; }
-    pre { background: #111; color: #0f0; padding: 12px; overflow: auto; }
+    input, select { width: 100%; padding: 8px; margin: 6px 0 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    button { padding: 8px 14px; cursor: pointer; margin-right: 8px; }
+    pre { background: #111; color: #0f0; padding: 12px; overflow: auto; max-height: 420px; }
   </style>
 </head>
 <body>
-  <h1>ABC2Sense Admin Shell (MVP)</h1>
+  <h1>ABC2Sense Admin Web MVP</h1>
+
   <div class="card">
     <h3>Admin Login</h3>
     <label>Email</label>
@@ -24,8 +26,69 @@
   </div>
 
   <div class="card">
-    <h3>Session</h3>
-    <button id="meBtn">Check /auth/me</button>
+    <h3>Users Module</h3>
+    <div class="grid">
+      <div>
+        <label>Search user</label>
+        <input id="userSearch" placeholder="email or username" />
+      </div>
+      <div>
+        <label>User ID to update</label>
+        <input id="userId" placeholder="Mongo user id" />
+      </div>
+    </div>
+    <div class="grid">
+      <div>
+        <label>New username</label>
+        <input id="username" placeholder="new username" />
+      </div>
+      <div>
+        <label>Role</label>
+        <select id="role">
+          <option value="">Keep current</option>
+          <option value="user">user</option>
+          <option value="admin">admin</option>
+        </select>
+      </div>
+    </div>
+    <button id="listUsersBtn">List users</button>
+    <button id="updateUserBtn">Update user</button>
+  </div>
+
+  <div class="card">
+    <h3>Subscriptions Module</h3>
+    <div class="grid">
+      <div>
+        <label>User ID</label>
+        <input id="subUserId" placeholder="Mongo user id" />
+      </div>
+      <div>
+        <label>Plan</label>
+        <input id="subPlan" placeholder="pro-monthly" />
+      </div>
+    </div>
+    <div class="grid">
+      <div>
+        <label>Subscription ID</label>
+        <input id="subscriptionId" placeholder="Mongo subscription id" />
+      </div>
+      <div>
+        <label>New status</label>
+        <select id="subStatus">
+          <option value="">Keep current</option>
+          <option value="active">active</option>
+          <option value="canceled">canceled</option>
+        </select>
+      </div>
+    </div>
+    <button id="listSubsBtn">List subscriptions</button>
+    <button id="createSubBtn">Create subscription</button>
+    <button id="updateSubBtn">Update subscription</button>
+    <button id="cancelSubBtn">Cancel subscription</button>
+  </div>
+
+  <div class="card">
+    <h3>Output</h3>
     <pre id="output">Ready.</pre>
   </div>
 
@@ -35,6 +98,20 @@
 
     const print = (obj) => {
       output.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+    };
+
+    const api = async (path, options = {}) => {
+      if (!token) throw new Error('No token set. Login first.');
+      const res = await fetch(path, {
+        ...options,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          ...(options.headers || {})
+        }
+      });
+      const data = await res.json();
+      return { status: res.status, data };
     };
 
     document.getElementById('loginBtn').addEventListener('click', async () => {
@@ -53,16 +130,72 @@
       print(data);
     });
 
-    document.getElementById('meBtn').addEventListener('click', async () => {
-      if (!token) {
-        print('No token set. Login first.');
-        return;
+    document.getElementById('listUsersBtn').addEventListener('click', async () => {
+      try {
+        const q = encodeURIComponent(document.getElementById('userSearch').value || '');
+        const result = await api(`/api/admin-web/users?q=${q}`);
+        print(result);
+      } catch (err) {
+        print(err.message);
       }
-      const res = await fetch('/api/admin-web/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      print(data);
+    });
+
+    document.getElementById('updateUserBtn').addEventListener('click', async () => {
+      try {
+        const id = document.getElementById('userId').value;
+        const username = document.getElementById('username').value;
+        const role = document.getElementById('role').value;
+        const body = {};
+        if (username) body.username = username;
+        if (role) body.role = role;
+        const result = await api(`/api/admin-web/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+        print(result);
+      } catch (err) {
+        print(err.message);
+      }
+    });
+
+    document.getElementById('listSubsBtn').addEventListener('click', async () => {
+      try {
+        print(await api('/api/admin-web/subscriptions'));
+      } catch (err) {
+        print(err.message);
+      }
+    });
+
+    document.getElementById('createSubBtn').addEventListener('click', async () => {
+      try {
+        const body = {
+          userId: document.getElementById('subUserId').value,
+          plan: document.getElementById('subPlan').value
+        };
+        print(await api('/api/admin-web/subscriptions', { method: 'POST', body: JSON.stringify(body) }));
+      } catch (err) {
+        print(err.message);
+      }
+    });
+
+    document.getElementById('updateSubBtn').addEventListener('click', async () => {
+      try {
+        const id = document.getElementById('subscriptionId').value;
+        const status = document.getElementById('subStatus').value;
+        const plan = document.getElementById('subPlan').value;
+        const body = {};
+        if (status) body.status = status;
+        if (plan) body.plan = plan;
+        print(await api(`/api/admin-web/subscriptions/${id}`, { method: 'PATCH', body: JSON.stringify(body) }));
+      } catch (err) {
+        print(err.message);
+      }
+    });
+
+    document.getElementById('cancelSubBtn').addEventListener('click', async () => {
+      try {
+        const id = document.getElementById('subscriptionId').value;
+        print(await api(`/api/admin-web/subscriptions/${id}/cancel`, { method: 'POST' }));
+      } catch (err) {
+        print(err.message);
+      }
     });
   </script>
 </body>
