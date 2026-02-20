@@ -10,7 +10,27 @@ const UserSchema = new Schema({
   uuid: { type: String, default: uuidv4 },
   password: { type: String, required: true },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
-  emailVerified: { type: Boolean, default: false }
+  emailVerified: { type: Boolean, default: false },
+  accountStatus: {
+    type: String,
+    enum: ['active', 'suspended'],
+    default: 'active'
+  },
+  subscription: {
+    plan: {
+      type: String,
+      enum: ['free', 'starter', 'pro', 'enterprise'],
+      default: 'free'
+    },
+    status: {
+      type: String,
+      enum: ['inactive', 'active', 'past_due', 'canceled'],
+      default: 'inactive'
+    },
+    startsAt: { type: Date, default: null },
+    endsAt: { type: Date, default: null },
+    autoRenew: { type: Boolean, default: false }
+  }
 });
 
 

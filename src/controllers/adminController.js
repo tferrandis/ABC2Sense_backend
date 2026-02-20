@@ -168,20 +168,66 @@ exports.login = async (req, res) => {
  * @apiError (500) {Boolean} success False
  * @apiError (500) {String} message Error message
  */
-// Get all users
+// Get all users with optional filtering and pagination
 exports.getUsers = async (req, res) => {
   try {
-    const users = await User.find().select('-password');
+    const {
+      q,
+      accountStatus,
+      subscriptionPlan,
+      subscriptionStatus,
+      page = 1,
+      limit = 25
+    } = req.query;
+
+    const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 100);
+    const safePage = Math.max(parseInt(page, 10) || 1, 1);
+
+    const filter = {};
+
+    if (q) {
+      filter.$or = [
+        { username: { $regex: q, $options: 'i' } },
+        { email: { $regex: q, $options: 'i' } },
+        { uuid: { $regex: q, $options: 'i' } }
+      ];
+    }
+
+    if (accountStatus) {
+      filter.accountStatus = accountStatus;
+    }
+
+    if (subscriptionPlan) {
+      filter['subscription.plan'] = subscriptionPlan;
+    }
+
+    if (subscriptionStatus) {
+      filter['subscription.status'] = subscriptionStatus;
+    }
+
+    const [users, total] = await Promise.all([
+      User.find(filter)
+        .select('-password')
+        .sort({ registrationDate: -1, createdAt: -1 })
+        .skip((safePage - 1) * safeLimit)
+        .limit(safeLimit),
+      User.countDocuments(filter)
+    ]);
+
     res.json({
       success: true,
+      page: safePage,
+      limit: safeLimit,
+      total,
+      totalPages: Math.ceil(total / safeLimit),
       count: users.length,
       users
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error', 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
     });
   }
 };
@@ -208,11 +254,11 @@ exports.getUsers = async (req, res) => {
 exports.getUserById = async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
-    
+
     if (!user) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'User not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
       });
     }
 
@@ -221,10 +267,116 @@ exports.getUserById = async (req, res) => {
       user
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error', 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+// Update user account status (active/suspended)
+exports.updateUserAccountStatus = async (req, res) => {
+  try {
+    const { accountStatus } = req.body;
+
+    if (!['active', 'suspended'].includes(accountStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: 'accountStatus must be one of: active, suspended'
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { accountStatus },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    await safeAuditLog({
+      actor: req.admin?._id || null,
+      actorIp: getClientIp(req),
+      action: 'admin_user_account_status_update',
+      target: 'User',
+      targetId: user._id,
+      status: 'success',
+      details: `Updated accountStatus to ${accountStatus}`
+    });
+
+    res.json({
+      success: true,
+      message: 'User account status updated',
+      user
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+// Update user subscription
+exports.updateUserSubscription = async (req, res) => {
+  try {
+    const { plan, status, startsAt, endsAt, autoRenew } = req.body;
+
+    const patch = {};
+
+    if (plan !== undefined) patch['subscription.plan'] = plan;
+    if (status !== undefined) patch['subscription.status'] = status;
+    if (startsAt !== undefined) patch['subscription.startsAt'] = startsAt ? new Date(startsAt) : null;
+    if (endsAt !== undefined) patch['subscription.endsAt'] = endsAt ? new Date(endsAt) : null;
+    if (autoRenew !== undefined) patch['subscription.autoRenew'] = Boolean(autoRenew);
+
+    if (Object.keys(patch).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one subscription field must be provided'
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: patch },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    await safeAuditLog({
+      actor: req.admin?._id || null,
+      actorIp: getClientIp(req),
+      action: 'admin_user_subscription_update',
+      target: 'User',
+      targetId: user._id,
+      status: 'success',
+      details: JSON.stringify(patch)
+    });
+
+    res.json({
+      success: true,
+      message: 'User subscription updated',
+      user
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
     });
   }
 };
