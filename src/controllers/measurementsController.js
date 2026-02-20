@@ -1,5 +1,6 @@
 const Measurement = require('../models/measurement');
 const User = require('../models/user');
+const mongoose = require('mongoose');
 
 const R = 6371; // Radio de la Tierra en km
 
@@ -393,6 +394,10 @@ exports.reassignMeasurementsBulk = async (req, res) => {
     return res.status(400).json({ error: 'targetUserId is required' });
   }
 
+  if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
+    return res.status(400).json({ error: 'targetUserId must be a valid ObjectId' });
+  }
+
   try {
     const targetUser = await User.findById(targetUserId).select('_id');
     if (!targetUser) {
@@ -402,6 +407,13 @@ exports.reassignMeasurementsBulk = async (req, res) => {
     const { from, to, lat, lng, radius, radius_m, sensorId, userId } = req.query;
     const hasFilter = from || to || (lat && lng && (radius || radius_m)) || sensorId || userId;
     const hasMeasurementIds = Array.isArray(measurementIds) && measurementIds.length > 0;
+
+    if (hasMeasurementIds) {
+      const invalidId = measurementIds.find(id => !mongoose.Types.ObjectId.isValid(id));
+      if (invalidId) {
+        return res.status(400).json({ error: `Invalid measurementId: ${invalidId}` });
+      }
+    }
 
     if (!hasFilter && !hasMeasurementIds) {
       return res.status(400).json({
