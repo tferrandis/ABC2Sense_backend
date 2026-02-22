@@ -15,6 +15,7 @@ app.use(passport.initialize());
 const adminRoutes = require('./routes/adminRoutes');
 const adminWebRoutes = require('./routes/adminWebRoutes');
 const firmwareRoutes = require('./routes/firmwareRoutes');
+const adminSensorRoutes = require('./routes/adminSensorRoutes');
 
 console.log("Connecting to mongodb...");
 
@@ -43,6 +44,8 @@ console.log("Connecting to mongodb...");
         app.use('/api/auth', adminRoutes);
         app.use('/api/admin-web', adminWebRoutes);
         app.use('/api/firmware', firmwareRoutes);
+        app.use('/api/v1/admin/sensors', adminSensorRoutes);
+        app.use('/api/admin/sensors', adminSensorRoutes);
 
         // Admin web MVP shell
         const adminShellPath = path.join(__dirname, 'public/admin');

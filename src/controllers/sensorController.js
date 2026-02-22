@@ -40,7 +40,7 @@ const SensorDefinition = require('../models/sensorDefinition');
  * @apiError (401) Unauthorized User not authenticated
  */
 exports.createSensorDefinition = async (req, res) => {
-  const { sensorId, key, name, unit, description, origin, enabled } = req.body;
+  const { sensorId, key, name, unit, description, origin, decimals, enabled } = req.body;
   try {
     const existingId = await SensorDefinition.findOne({ sensorId });
     if (existingId) return res.status(400).json({ message: "Sensor ID already exists" });
@@ -48,9 +48,17 @@ exports.createSensorDefinition = async (req, res) => {
     const existingKey = await SensorDefinition.findOne({ key: key.toUpperCase() });
     if (existingKey) return res.status(400).json({ message: "Sensor key already exists" });
 
-    const def = new SensorDefinition({ sensorId, key, name, unit, description, origin, enabled });
+    const def = new SensorDefinition({ sensorId, key, name, unit, description, origin, decimals, enabled });
     await def.save();
-    res.status(201).json(def);
+    res.status(201).json({
+      id: def._id,
+      sensorId: def.sensorId,
+      name: def.name,
+      unit: def.unit,
+      decimals: def.decimals,
+      enabled: def.enabled,
+      catalog_version: def.catalogVersion
+    });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -90,8 +98,21 @@ exports.createSensorDefinition = async (req, res) => {
  */
 exports.getSensorDefinitions = async (req, res) => {
   try {
-    const sensors = await SensorDefinition.find({});
-    res.status(200).json(sensors);
+    const sensors = await SensorDefinition
+      .find({ enabled: true })
+      .sort({ sensorId: 1 })
+      .lean();
+
+    const payload = sensors.map((sensor) => ({
+      id: sensor._id,
+      sensorId: sensor.sensorId,
+      name: sensor.name,
+      unit: sensor.unit,
+      decimals: sensor.decimals,
+      catalog_version: sensor.catalogVersion
+    }));
+
+    res.status(200).json(payload);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
