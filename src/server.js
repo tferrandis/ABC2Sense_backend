@@ -13,6 +13,7 @@ app.use(passport.initialize());
 
 // Import new routes
 const adminRoutes = require('./routes/adminRoutes');
+const adminWebRoutes = require('./routes/adminWebRoutes');
 const firmwareRoutes = require('./routes/firmwareRoutes');
 
 console.log("Connecting to mongodb...");
@@ -40,7 +41,12 @@ console.log("Connecting to mongodb...");
 
         // Register admin and firmware routes
         app.use('/api/auth', adminRoutes);
+        app.use('/api/admin-web', adminWebRoutes);
         app.use('/api/firmware', firmwareRoutes);
+
+        // Admin web MVP shell
+        const adminShellPath = path.join(__dirname, 'public/admin');
+        app.use('/admin', express.static(adminShellPath));
 
         // Auto-load other routes
         const routesPath = path.join(__dirname, 'routes');
@@ -51,6 +57,8 @@ console.log("Connecting to mongodb...");
 
                 if (routeName === 'authRoutes') {
                     app.use('/api/auth', route);
+                } else if (routeName === 'adminRoutes' || routeName === 'firmwareRoutes' || routeName === 'adminWebRoutes') {
+                    // Already mounted above with explicit prefixes.
                 } else {
                     console.log(`Route /api/${routeName.replace('Routes', '').toLowerCase()}`);
                     app.use(`/api/${routeName.replace('Routes', '').toLowerCase()}`, route);
