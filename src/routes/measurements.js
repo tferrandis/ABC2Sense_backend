@@ -20,6 +20,9 @@ router.get('/', passport.authenticate('jwt', { session: false }), measurementCon
 // Exportar mediciones filtradas (json/csv/xlsx)
 router.get('/export', passport.authenticate('jwt', { session: false }), measurementController.exportMeasurements);
 
+// Reasignar mediciones en bulk (admin, requiere X-Confirm: true)
+router.patch('/reassign', passport.authenticate('jwt', { session: false }), measurementController.reassignMeasurementsBulk);
+
 // Obtener una medición específica por ID
 router.get('/:id', passport.authenticate('jwt', { session: false }), measurementController.getMeasurementById);
 
