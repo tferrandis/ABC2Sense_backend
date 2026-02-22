@@ -1,7 +1,29 @@
 const Firmware = require('../models/firmware');
+const OtaEvent = require('../models/otaEvent');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+
+const resolveClientIp = (req) => {
+  const forwardedFor = req.headers['x-forwarded-for'];
+  if (forwardedFor) {
+    return forwardedFor.split(',')[0].trim();
+  }
+  return req.ip || req.socket?.remoteAddress || null;
+};
+
+const logOtaEvent = async (req, data) => {
+  try {
+    await OtaEvent.create({
+      ip: resolveClientIp(req),
+      userAgent: req.get('user-agent') || null,
+      deviceId: req.get('x-device-id') || req.query.deviceId || null,
+      ...data
+    });
+  } catch (error) {
+    console.error('[OTA_EVENT_LOG_ERROR]', error.message);
+  }
+};
 
 // Configure multer for file upload
 const storage = multer.diskStorage({
@@ -116,6 +138,18 @@ exports.upload = (req, res) => {
 
       await firmware.save();
 
+      await logOtaEvent(req, {
+        type: 'upload',
+        status: 'success',
+        firmware: firmware._id,
+        version: firmware.version,
+        meta: {
+          size: firmware.size,
+          filename: firmware.originalName,
+          uploadedBy: req.admin?._id?.toString() || null
+        }
+      });
+
       res.status(201).json({
         success: true,
         message: 'Firmware uploaded successfully',
@@ -126,6 +160,12 @@ exports.upload = (req, res) => {
       if (req.file) {
         fs.unlinkSync(req.file.path);
       }
+      await logOtaEvent(req, {
+        type: 'upload',
+        status: 'error',
+        meta: { error: error.message }
+      });
+
       res.status(500).json({
         success: false,
         message: 'Server error',
@@ -238,6 +278,12 @@ exports.download = async (req, res) => {
     const firmware = await Firmware.findById(req.params.id);
 
     if (!firmware) {
+      await logOtaEvent(req, {
+        type: 'download',
+        status: 'error',
+        meta: { error: 'Firmware not found', firmwareId: req.params.id }
+      });
+
       return res.status(404).json({
         success: false,
         message: 'Firmware not found'
@@ -248,9 +294,23 @@ exports.download = async (req, res) => {
     firmware.downloads += 1;
     await firmware.save();
 
+    await logOtaEvent(req, {
+      type: 'download',
+      status: 'success',
+      firmware: firmware._id,
+      version: firmware.version,
+      meta: { downloads: firmware.downloads }
+    });
+
     // Send file
     res.download(firmware.path, firmware.originalName);
   } catch (error) {
+    await logOtaEvent(req, {
+      type: 'download',
+      status: 'error',
+      meta: { error: error.message, firmwareId: req.params.id }
+    });
+
     res.status(500).json({
       success: false,
       message: 'Server error',
@@ -278,6 +338,54 @@ exports.download = async (req, res) => {
  * @apiError (404) {Boolean} success False
  * @apiError (404) {String} message No active firmware available
  */
+// Get firmware catalog
+exports.getCatalog = async (req, res) => {
+  try {
+    const requestedLimit = Number(req.query.limit);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(requestedLimit, 1), 50)
+      : 10;
+
+    const firmwares = await Firmware.find({ isActive: true })
+      .sort({ createdAt: -1 })
+      .limit(limit);
+
+    await logOtaEvent(req, {
+      type: 'catalog',
+      status: 'success',
+      meta: {
+        limit,
+        results: firmwares.length
+      }
+    });
+
+    res.json({
+      success: true,
+      count: firmwares.length,
+      firmwares: firmwares.map((firmware) => ({
+        id: firmware._id,
+        version: firmware.version,
+        description: firmware.description,
+        size: firmware.size,
+        createdAt: firmware.createdAt,
+        downloadUrl: `/api/firmware/download/${firmware._id}`
+      }))
+    });
+  } catch (error) {
+    await logOtaEvent(req, {
+      type: 'catalog',
+      status: 'error',
+      meta: { error: error.message }
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
 // Get latest firmware
 exports.getLatest = async (req, res) => {
   try {
@@ -285,11 +393,24 @@ exports.getLatest = async (req, res) => {
       .sort({ createdAt: -1 });
 
     if (!firmware) {
+      await logOtaEvent(req, {
+        type: 'latest',
+        status: 'error',
+        meta: { error: 'No active firmware available' }
+      });
+
       return res.status(404).json({
         success: false,
         message: 'No active firmware available'
       });
     }
+
+    await logOtaEvent(req, {
+      type: 'latest',
+      status: 'success',
+      firmware: firmware._id,
+      version: firmware.version
+    });
 
     res.json({
       success: true,
@@ -302,6 +423,12 @@ exports.getLatest = async (req, res) => {
       }
     });
   } catch (error) {
+    await logOtaEvent(req, {
+      type: 'latest',
+      status: 'error',
+      meta: { error: error.message }
+    });
+
     res.status(500).json({
       success: false,
       message: 'Server error',
@@ -343,16 +470,63 @@ exports.setActive = async (req, res) => {
     );
 
     if (!firmware) {
+      await logOtaEvent(req, {
+        type: 'activate',
+        status: 'error',
+        meta: { error: 'Firmware not found', firmwareId: req.params.id }
+      });
+
       return res.status(404).json({
         success: false,
         message: 'Firmware not found'
       });
     }
 
+    await logOtaEvent(req, {
+      type: 'activate',
+      status: 'success',
+      firmware: firmware._id,
+      version: firmware.version,
+      meta: { activatedBy: req.admin?._id?.toString() || null }
+    });
+
     res.json({
       success: true,
       message: 'Firmware activated successfully',
       firmware
+    });
+  } catch (error) {
+    await logOtaEvent(req, {
+      type: 'activate',
+      status: 'error',
+      meta: { error: error.message, firmwareId: req.params.id }
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+// List OTA events (admin)
+exports.listEvents = async (req, res) => {
+  try {
+    const requestedLimit = Number(req.query.limit);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(requestedLimit, 1), 200)
+      : 50;
+
+    const events = await OtaEvent.find()
+      .populate('firmware', 'version')
+      .sort({ createdAt: -1 })
+      .limit(limit);
+
+    res.json({
+      success: true,
+      count: events.length,
+      events
     });
   } catch (error) {
     res.status(500).json({
