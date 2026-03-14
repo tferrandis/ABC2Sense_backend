@@ -100,6 +100,36 @@ exports.analysis = async (req, res) => {
   }
 };
 
+async function runReport({ userId, measurement, cropContext = {}, requestMeta = {} }) {
+  const promptObj = measurementReportPrompt({ measurement, cropContext });
+
+  const response = await generateJson({ prompt: promptObj.prompt, model: process.env.GEMINI_MODEL_REASON || process.env.GEMINI_MODEL_FAST });
+  const run = await saveRun({
+    userId,
+    kind: 'report',
+    model: response.model,
+    promptVersion: promptObj.version,
+    requestPayload: requestMeta,
+    responsePayload: response.json,
+    status: 'ok',
+    latencyMs: response.latencyMs
+  });
+
+  const insight = await AiInsight.create({
+    user_id: userId,
+    notebook_id: measurement.notebook_id || null,
+    measurement_id: measurement._id || null,
+    type: 'report',
+    summary: response.json.summary || '',
+    anomalies: response.json.risks || [],
+    trends: [],
+    confidence: response.json.confidence || null,
+    run_id: run._id
+  });
+
+  return { run, insight, report: response.json, promptVersion: promptObj.version };
+}
+
 exports.report = async (req, res) => {
   if (!AI_ENABLED) return disabledResponse(res);
 
@@ -111,46 +141,66 @@ exports.report = async (req, res) => {
   const measurement = await Measurement.findOne({ _id: measurementId, user_id: userId }).lean();
   if (!measurement) return res.status(404).json({ error: 'Measurement not found' });
 
-  const promptObj = measurementReportPrompt({ measurement, cropContext });
-
   try {
-    const response = await generateJson({ prompt: promptObj.prompt, model: process.env.GEMINI_MODEL_REASON || process.env.GEMINI_MODEL_FAST });
-    const run = await saveRun({
+    const finalResult = await runReport({
       userId,
-      kind: 'report',
-      model: response.model,
-      promptVersion: promptObj.version,
-      requestPayload: { measurementId, cropContext },
-      responsePayload: response.json,
-      status: 'ok',
-      latencyMs: response.latencyMs
+      measurement,
+      cropContext,
+      requestMeta: { measurementId, cropContext }
     });
-
-    const insight = await AiInsight.create({
-      user_id: userId,
-      notebook_id: measurement.notebook_id || null,
-      measurement_id: measurement._id,
-      type: 'report',
-      summary: response.json.summary || '',
-      anomalies: response.json.risks || [],
-      trends: [],
-      confidence: response.json.confidence || null,
-      run_id: run._id
-    });
-
-    return res.json({ runId: run._id, insight, report: response.json });
+    return res.json({ runId: finalResult.run._id, insight: finalResult.insight, report: finalResult.report });
   } catch (error) {
     const run = await saveRun({
       userId,
       kind: 'report',
       model: process.env.GEMINI_MODEL_REASON || process.env.GEMINI_MODEL_FAST || 'unknown',
-      promptVersion: promptObj.version,
+      promptVersion: 'measurement_report_v1',
       requestPayload: { measurementId, cropContext },
       responsePayload: {},
       status: 'error',
       errorMessage: error.message
     });
     return res.status(500).json({ error: 'report_failed', details: error.message, runId: run._id });
+  }
+};
+
+exports.reportFromData = async (req, res) => {
+  if (!AI_ENABLED) return disabledResponse(res);
+
+  const userId = req.user.id;
+  const { measurement, cropContext = {} } = req.body;
+
+  if (!measurement || typeof measurement !== 'object') {
+    return res.status(400).json({ error: 'measurement object is required' });
+  }
+
+  try {
+    const normalizedMeasurement = {
+      _id: measurement.id || null,
+      notebook_id: measurement.notebook_id || measurement.notebookId || null,
+      timestamp: measurement.timestamp || new Date().toISOString(),
+      measurements: measurement.measurements || measurement.sensors || []
+    };
+
+    const finalResult = await runReport({
+      userId,
+      measurement: normalizedMeasurement,
+      cropContext,
+      requestMeta: { mode: 'report_from_data', cropContext }
+    });
+    return res.json({ runId: finalResult.run._id, insight: finalResult.insight, report: finalResult.report });
+  } catch (error) {
+    const run = await saveRun({
+      userId,
+      kind: 'report',
+      model: process.env.GEMINI_MODEL_REASON || process.env.GEMINI_MODEL_FAST || 'unknown',
+      promptVersion: 'measurement_report_v1',
+      requestPayload: { mode: 'report_from_data' },
+      responsePayload: {},
+      status: 'error',
+      errorMessage: error.message
+    });
+    return res.status(500).json({ error: 'report_from_data_failed', details: error.message, runId: run._id });
   }
 };
 
@@ -275,4 +325,13 @@ exports.getRunById = async (req, res) => {
   const run = await AiRun.findOne({ _id: req.params.id, user_id: userId }).lean();
   if (!run) return res.status(404).json({ error: 'Run not found' });
   return res.json(run);
+};
+
+exports.status = async (_req, res) => {
+  return res.json({
+    available: AI_ENABLED,
+    provider: 'gemini',
+    model_fast: process.env.GEMINI_MODEL_FAST || 'gemini-2.0-flash',
+    subscription_required: true
+  });
 };

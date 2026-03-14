@@ -24,7 +24,8 @@ AI_TIMEOUT_MS=20000
 ```
 
 ## API endpoints
-All endpoints require JWT auth.
+`GET /api/ai/status` is public and reports availability.
+All other endpoints require JWT auth.
 
 - `POST /api/ai/analysis`
   - Input: `notebookId?`, `currentFrom`, `currentTo`, `previousFrom?`, `previousTo?`, `mode?`, `cropContext?`
@@ -32,6 +33,10 @@ All endpoints require JWT auth.
 
 - `POST /api/ai/report`
   - Input: `measurementId`, `cropContext?`
+  - Output: `runId`, `insight`, `report`
+
+- `POST /api/ai/report-from-data`
+  - Input: `measurement` object (timestamp + sensors), `cropContext?`
   - Output: `runId`, `insight`, `report`
 
 - `POST /api/ai/preset-suggestions`
