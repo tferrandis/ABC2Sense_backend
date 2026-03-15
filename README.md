@@ -177,6 +177,19 @@ El script hace backup automático de tu configuración actual antes de aplicar c
 - `GET /api/measurements` - Obtener mediciones (con filtros de fecha, ubicación y paginación)
 - `DELETE /api/measurements/:id` - Eliminar una medición
 
+### AI (Gemini)
+- `POST /api/ai/analysis` - Análisis temporal (actual vs anterior) con recomendaciones
+- `POST /api/ai/report` - Informe IA de una medición concreta
+- `POST /api/ai/preset-suggestions` - Sugerencias de presets por cultivo
+- `POST /api/ai/chat` - Chat guiado sobre sensores y métricas
+- `POST /api/ai/feedback` - Feedback de utilidad de recomendaciones
+- `GET /api/ai/insights` - Histórico de insights IA
+- `GET /api/ai/runs/:id` - Trazabilidad de ejecución IA
+
+Ver documentación detallada en `docs/ai-gemini-integration.md`.
+
+> Seguridad IA: la clave `GEMINI_API_KEY` debe configurarse solo en `.env` del backend (nunca en app móvil ni en código versionado).
+
 ### Administración
 - `GET /api/auth/users` - Listar usuarios
 - `GET /api/auth/stats` - Estadísticas del sistema
