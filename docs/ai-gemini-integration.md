@@ -12,7 +12,7 @@ Implemented capabilities:
 - Run traceability (`ai_runs`) with prompt version and latency
 
 ## Environment setup
-Add to `.env`:
+Add to `.env` (server-side only):
 
 ```env
 AI_ENABLED=true
@@ -22,6 +22,26 @@ GEMINI_MODEL_REASON=gemini-2.0-flash
 GEMINI_API_BASE=https://generativelanguage.googleapis.com/v1beta
 AI_TIMEOUT_MS=20000
 ```
+
+Security notes:
+- `GEMINI_API_KEY` must live only in backend `.env`.
+- Never hardcode the key in source files.
+- Never expose the key in Flutter/mobile app.
+- `.env` is already ignored by git in this repo (`.gitignore`).
+- Rotate/revoke the key if you suspect leakage.
+
+## How to get a Gemini API key
+1. Go to Google AI Studio: https://aistudio.google.com/app/apikey
+2. Sign in with your Google account.
+3. Click **Create API key** (or select an existing project).
+4. Copy the generated key.
+5. Put it in backend `.env` as `GEMINI_API_KEY=...`.
+6. Restart backend process/service after updating `.env`.
+
+Recommended operational setup:
+- Use a different key per environment (dev/staging/prod).
+- Restrict usage in Google Cloud where possible.
+- Store keys in secret manager/CI secrets for deployments.
 
 ## API endpoints
 `GET /api/ai/status` is public and reports availability.

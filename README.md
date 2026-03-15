@@ -188,6 +188,8 @@ El script hace backup automático de tu configuración actual antes de aplicar c
 
 Ver documentación detallada en `docs/ai-gemini-integration.md`.
 
+> Seguridad IA: la clave `GEMINI_API_KEY` debe configurarse solo en `.env` del backend (nunca en app móvil ni en código versionado).
+
 ### Administración
 - `GET /api/auth/users` - Listar usuarios
 - `GET /api/auth/stats` - Estadísticas del sistema
