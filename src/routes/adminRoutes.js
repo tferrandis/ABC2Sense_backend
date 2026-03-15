@@ -9,6 +9,8 @@ router.post('/', adminController.login);
 // Protected routes (require admin authentication)
 router.get('/users', adminAuth, adminController.getUsers);
 router.get('/users/:id', adminAuth, adminController.getUserById);
+router.patch('/users/:id/account-status', adminAuth, adminController.updateUserAccountStatus);
+router.patch('/users/:id/subscription', adminAuth, adminController.updateUserSubscription);
 router.delete('/users/:id', adminAuth, adminController.deleteUser);
 router.get('/stats', adminAuth, adminController.getStats);
 router.get('/profile', adminAuth, adminController.getProfile);
