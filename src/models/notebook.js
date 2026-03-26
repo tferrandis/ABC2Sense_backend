@@ -17,6 +17,7 @@ const NotebookSchema = new Schema({
   emoji: { type: String, default: null },
   color_hex: { type: String, default: null },
   description: { type: String, default: null },
+  preset_id: { type: String, default: null },
   active: { type: Boolean, default: true }
 }, {
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
