@@ -291,18 +291,35 @@ exports.chat = async (req, res) => {
 
 exports.feedback = async (req, res) => {
   const userId = req.user.id;
-  const { recommendationId = null, runId = null, useful, notes = '' } = req.body;
+  const {
+    recommendationId = null,
+    runId = null,
+    useful,
+    notes = '',
+    rating,
+    comment
+  } = req.body;
 
-  if (typeof useful !== 'boolean') {
-    return res.status(400).json({ error: 'useful must be boolean' });
+  // Backward compatible:
+  // - legacy clients send { useful:boolean, notes?:string }
+  // - new app client sends { rating:number, comment?:string }
+  let usefulValue = useful;
+  if (typeof usefulValue !== 'boolean') {
+    if (typeof rating === 'number' && Number.isFinite(rating)) {
+      usefulValue = rating > 0;
+    }
+  }
+
+  if (typeof usefulValue !== 'boolean') {
+    return res.status(400).json({ error: 'useful must be boolean or rating must be numeric' });
   }
 
   const feedback = await AiFeedback.create({
     user_id: userId,
     recommendation_id: recommendationId,
     run_id: runId,
-    useful,
-    notes
+    useful: usefulValue,
+    notes: (typeof comment === 'string' && comment.trim()) ? comment.trim() : notes
   });
 
   return res.status(201).json(feedback);
@@ -328,10 +345,12 @@ exports.getRunById = async (req, res) => {
 };
 
 exports.status = async (_req, res) => {
+  // Temporary policy: subscriptions are effectively active for all users.
   return res.json({
     available: AI_ENABLED,
     provider: 'gemini',
-    model_fast: process.env.GEMINI_MODEL_FAST || 'gemini-2.0-flash',
-    subscription_required: true
+    model_fast: process.env.GEMINI_MODEL_FAST || 'gemini-2.5-flash',
+    subscription_required: false,
+    subscription_active: true
   });
 };
