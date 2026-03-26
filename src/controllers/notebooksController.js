@@ -7,11 +7,67 @@ function resolveOwner(req, requestedUserId) {
   return (req.user.role === 'admin' && requestedUserId) ? requestedUserId : req.user._id;
 }
 
+function normalizeHexColor(colorHex) {
+  if (!colorHex) return null;
+  const raw = String(colorHex).trim();
+  const normalized = raw.startsWith('#') ? raw : `#${raw}`;
+  if (!/^#[0-9A-Fa-f]{6}$/.test(normalized)) {
+    throw new Error('color_hex must be a valid hex color (#RRGGBB)');
+  }
+  return normalized.toUpperCase();
+}
+
 function validateArea(type, area) {
   if (type !== 'area') return;
-  if (!area || typeof area.lat !== 'number' || typeof area.long !== 'number' || typeof area.radius_m !== 'number') {
-    throw new Error('Area notebooks require area.lat, area.long and area.radius_m as numbers');
+  if (!area) return; // area notebooks can exist without defined area yet
+
+  const mode = area.mode || 'circle';
+  if (!['circle', 'polygon'].includes(mode)) {
+    throw new Error('area.mode must be circle or polygon');
   }
+
+  if (mode === 'polygon') {
+    if (!Array.isArray(area.points) || area.points.length < 3) {
+      throw new Error('area.points must contain at least 3 points for polygon mode');
+    }
+    for (const p of area.points) {
+      if (typeof p?.lat !== 'number' || typeof p?.lon !== 'number') {
+        throw new Error('polygon points require numeric lat and lon');
+      }
+    }
+    return;
+  }
+
+  // circle mode: if any circle field provided, require full set
+  const lon = area.lon ?? area.long;
+  const hasAny = area.lat != null || lon != null || area.radius_m != null;
+  if (!hasAny) return;
+
+  if (typeof area.lat !== 'number' || typeof lon !== 'number' || typeof area.radius_m !== 'number') {
+    throw new Error('Area circle requires area.lat, area.lon and area.radius_m as numbers');
+  }
+}
+
+function normalizeArea(area) {
+  if (!area) return null;
+  const mode = area.mode || 'circle';
+  if (mode === 'polygon') {
+    return {
+      mode: 'polygon',
+      lat: null,
+      lon: null,
+      radius_m: null,
+      points: (area.points || []).map((p) => ({ lat: p.lat, lon: p.lon }))
+    };
+  }
+
+  return {
+    mode: 'circle',
+    lat: area.lat ?? null,
+    lon: area.lon ?? area.long ?? null,
+    radius_m: area.radius_m ?? null,
+    points: []
+  };
 }
 
 async function validatePresetRanges(sensorRanges) {
@@ -35,12 +91,33 @@ async function validatePresetRanges(sensorRanges) {
 
 exports.createNotebook = async (req, res) => {
   try {
-    const { name, type = 'simple', area = null, description = null, user_id = null } = req.body;
-    if (!name) return res.status(400).json({ error: 'name is required' });
-    validateArea(type, area);
+    const {
+      name,
+      type = 'simple',
+      area = null,
+      description = null,
+      emoji = null,
+      color_hex = null,
+      user_id = null
+    } = req.body;
 
+    if (!name) return res.status(400).json({ error: 'name is required' });
+
+    validateArea(type, area);
     const owner = resolveOwner(req, user_id);
-    const notebook = await Notebook.create({ user_id: owner, name, type, area, description });
+
+    const duplicate = await Notebook.findOne({ user_id: owner, name: { $regex: `^${String(name).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } });
+    if (duplicate) return res.status(409).json({ error: 'Notebook name already exists' });
+
+    const notebook = await Notebook.create({
+      user_id: owner,
+      name: String(name).trim(),
+      type,
+      area: normalizeArea(area),
+      description,
+      emoji: emoji ? String(emoji).trim() : null,
+      color_hex: normalizeHexColor(color_hex)
+    });
     return res.status(201).json(notebook);
   } catch (error) {
     return res.status(400).json({ error: error.message });
@@ -66,10 +143,25 @@ exports.updateNotebook = async (req, res) => {
     }
 
     const nextType = req.body.type || notebook.type;
-    const nextArea = req.body.area || notebook.area;
+    const nextArea = Object.prototype.hasOwnProperty.call(req.body, 'area') ? req.body.area : notebook.area;
     validateArea(nextType, nextArea);
 
-    Object.assign(notebook, req.body);
+    if (req.body.name && String(req.body.name).trim().toLowerCase() !== String(notebook.name).trim().toLowerCase()) {
+      const duplicate = await Notebook.findOne({
+        _id: { $ne: notebook._id },
+        user_id: notebook.user_id,
+        name: { $regex: `^${String(req.body.name).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' }
+      });
+      if (duplicate) return res.status(409).json({ error: 'Notebook name already exists' });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'name')) notebook.name = String(req.body.name).trim();
+    if (Object.prototype.hasOwnProperty.call(req.body, 'type')) notebook.type = req.body.type;
+    if (Object.prototype.hasOwnProperty.call(req.body, 'description')) notebook.description = req.body.description;
+    if (Object.prototype.hasOwnProperty.call(req.body, 'emoji')) notebook.emoji = req.body.emoji ? String(req.body.emoji).trim() : null;
+    if (Object.prototype.hasOwnProperty.call(req.body, 'color_hex')) notebook.color_hex = normalizeHexColor(req.body.color_hex);
+    if (Object.prototype.hasOwnProperty.call(req.body, 'area')) notebook.area = normalizeArea(req.body.area);
+
     await notebook.save();
     return res.status(200).json(notebook);
   } catch (error) {
