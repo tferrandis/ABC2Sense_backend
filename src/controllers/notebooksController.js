@@ -70,6 +70,21 @@ function normalizeArea(area) {
   };
 }
 
+function normalizeSensorRanges(inputRanges) {
+  if (!Array.isArray(inputRanges)) throw new Error('sensor_ranges must be an array');
+
+  return inputRanges.map((range) => {
+    const sensorId = isNaN(range.sensor_id) ? range.sensor_id : parseInt(range.sensor_id, 10);
+    const optimalMin = typeof range.optimal_min === 'number' ? range.optimal_min : range.min;
+    const optimalMax = typeof range.optimal_max === 'number' ? range.optimal_max : range.max;
+    return {
+      sensor_id: sensorId,
+      optimal_min: optimalMin,
+      optimal_max: optimalMax
+    };
+  });
+}
+
 async function validatePresetRanges(sensorRanges) {
   if (!Array.isArray(sensorRanges)) throw new Error('sensor_ranges must be an array');
 
@@ -81,11 +96,20 @@ async function validatePresetRanges(sensorRanges) {
       throw new Error('optimal_min cannot be greater than optimal_max');
     }
 
-    const sensorId = isNaN(range.sensor_id) ? range.sensor_id : parseInt(range.sensor_id);
+    const sensorId = isNaN(range.sensor_id) ? range.sensor_id : parseInt(range.sensor_id, 10);
     const exists = await SensorDefinition.exists({ sensorId, enabled: true });
     if (!exists) {
       throw new Error(`sensor_id ${range.sensor_id} is not available in enabled sensor catalog`);
     }
+  }
+}
+
+async function validatePresetOwnership({ presetId, owner }) {
+  if (!presetId) return;
+  const preset = await Preset.findById(presetId);
+  if (!preset) throw new Error('preset_id does not exist');
+  if (String(preset.user_id) !== String(owner)) {
+    throw new Error('preset_id does not belong to owner');
   }
 }
 
@@ -96,6 +120,7 @@ exports.createNotebook = async (req, res) => {
       type = 'simple',
       area = null,
       description = null,
+      preset_id = null,
       emoji = null,
       color_hex = null,
       user_id = null
@@ -109,12 +134,15 @@ exports.createNotebook = async (req, res) => {
     const duplicate = await Notebook.findOne({ user_id: owner, name: { $regex: `^${String(name).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } });
     if (duplicate) return res.status(409).json({ error: 'Notebook name already exists' });
 
+    await validatePresetOwnership({ presetId: preset_id, owner });
+
     const notebook = await Notebook.create({
       user_id: owner,
       name: String(name).trim(),
       type,
       area: normalizeArea(area),
       description,
+      preset_id: preset_id || null,
       emoji: emoji ? String(emoji).trim() : null,
       color_hex: normalizeHexColor(color_hex)
     });
@@ -158,6 +186,10 @@ exports.updateNotebook = async (req, res) => {
     if (Object.prototype.hasOwnProperty.call(req.body, 'name')) notebook.name = String(req.body.name).trim();
     if (Object.prototype.hasOwnProperty.call(req.body, 'type')) notebook.type = req.body.type;
     if (Object.prototype.hasOwnProperty.call(req.body, 'description')) notebook.description = req.body.description;
+    if (Object.prototype.hasOwnProperty.call(req.body, 'preset_id')) {
+      await validatePresetOwnership({ presetId: req.body.preset_id, owner: notebook.user_id });
+      notebook.preset_id = req.body.preset_id || null;
+    }
     if (Object.prototype.hasOwnProperty.call(req.body, 'emoji')) notebook.emoji = req.body.emoji ? String(req.body.emoji).trim() : null;
     if (Object.prototype.hasOwnProperty.call(req.body, 'color_hex')) notebook.color_hex = normalizeHexColor(req.body.color_hex);
     if (Object.prototype.hasOwnProperty.call(req.body, 'area')) notebook.area = normalizeArea(req.body.area);
@@ -186,11 +218,18 @@ exports.deleteNotebook = async (req, res) => {
 
 exports.createPreset = async (req, res) => {
   try {
-    const { name, notebook_id = null, sensor_ranges = [], user_id = null } = req.body;
+    const {
+      name,
+      notebook_id = null,
+      sensor_ranges = null,
+      ranges = null,
+      user_id = null
+    } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
 
     const owner = resolveOwner(req, user_id);
-    await validatePresetRanges(sensor_ranges);
+    const normalizedRanges = normalizeSensorRanges(sensor_ranges || ranges || []);
+    await validatePresetRanges(normalizedRanges);
 
     if (notebook_id) {
       const notebook = await Notebook.findById(notebook_id);
@@ -200,8 +239,15 @@ exports.createPreset = async (req, res) => {
       }
     }
 
-    const preset = await Preset.create({ user_id: owner, name, notebook_id, sensor_ranges });
-    return res.status(201).json(preset);
+    const preset = await Preset.create({ user_id: owner, name, notebook_id, sensor_ranges: normalizedRanges });
+    const out = preset.toObject();
+    out.id = String(out._id);
+    out.ranges = (out.sensor_ranges || []).map((r) => ({
+      sensor_id: r.sensor_id,
+      min: r.optimal_min,
+      max: r.optimal_max
+    }));
+    return res.status(201).json(out);
   } catch (error) {
     return res.status(400).json({ error: error.message });
   }
@@ -211,7 +257,17 @@ exports.getPresets = async (req, res) => {
   try {
     const owner = resolveOwner(req, req.query.userId);
     const presets = await Preset.find({ user_id: owner }).sort({ created_at: -1 });
-    return res.status(200).json({ total: presets.length, presets });
+    const mapped = presets.map((p) => {
+      const out = p.toObject();
+      out.id = String(out._id);
+      out.ranges = (out.sensor_ranges || []).map((r) => ({
+        sensor_id: r.sensor_id,
+        min: r.optimal_min,
+        max: r.optimal_max
+      }));
+      return out;
+    });
+    return res.status(200).json({ total: mapped.length, presets: mapped });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -225,10 +281,25 @@ exports.updatePreset = async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    if (req.body.sensor_ranges) await validatePresetRanges(req.body.sensor_ranges);
-    Object.assign(preset, req.body);
+    const patch = { ...req.body };
+    if (patch.sensor_ranges || patch.ranges) {
+      const normalizedRanges = normalizeSensorRanges(patch.sensor_ranges || patch.ranges || []);
+      await validatePresetRanges(normalizedRanges);
+      patch.sensor_ranges = normalizedRanges;
+      delete patch.ranges;
+    }
+
+    Object.assign(preset, patch);
     await preset.save();
-    return res.status(200).json(preset);
+
+    const out = preset.toObject();
+    out.id = String(out._id);
+    out.ranges = (out.sensor_ranges || []).map((r) => ({
+      sensor_id: r.sensor_id,
+      min: r.optimal_min,
+      max: r.optimal_max
+    }));
+    return res.status(200).json(out);
   } catch (error) {
     return res.status(400).json({ error: error.message });
   }
