@@ -349,7 +349,7 @@ exports.status = async (_req, res) => {
   return res.json({
     available: AI_ENABLED,
     provider: 'gemini',
-    model_fast: process.env.GEMINI_MODEL_FAST || 'gemini-2.0-flash',
+    model_fast: process.env.GEMINI_MODEL_FAST || 'gemini-2.5-flash',
     subscription_required: false,
     subscription_active: true
   });
