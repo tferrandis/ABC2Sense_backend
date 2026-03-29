@@ -19,7 +19,7 @@ function parseJsonFromText(text) {
   }
 }
 
-async function generateJson({ prompt, model = DEFAULT_MODEL, timeoutMs = 20000 }) {
+async function generateJson({ prompt, model = DEFAULT_MODEL, timeoutMs = 60000 }) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY missing');
   }
