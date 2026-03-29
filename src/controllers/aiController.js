@@ -227,11 +227,13 @@ exports.presetSuggestions = async (req, res) => {
       latencyMs: response.latencyMs
     });
 
+    const normalizedSuggestions = response.json.suggestions || response.json.presetSuggestions || [];
+
     const doc = await AiPresetSuggestion.create({
       user_id: userId,
       notebook_id: notebookId,
       crop_type: cropType,
-      suggestions: response.json.suggestions || [],
+      suggestions: normalizedSuggestions,
       run_id: run._id
     });
 
