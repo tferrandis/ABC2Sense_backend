@@ -31,7 +31,7 @@ function presetSuggestPrompt(context) {
   return {
     version: 'preset_suggest_v1',
     prompt: jsonBlock(
-      '{status, crop_type, suggestions:[{name,description,ranges:{metric:{min,max}},confidence,reason}] }',
+      '{status, crop_type, suggestions:[{name,description,activeSensors:[number],indifferentSensors:[number],ranges:{metric:{min,max}},confidence,reason}] }',
       context
     )
   };
