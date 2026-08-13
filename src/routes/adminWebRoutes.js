@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 const adminWebController = require('../controllers/adminWebController');
-const adminAuth = require('../middleware/adminAuth');
+const adminAuth = require('../middlewares/adminAuth');
 
 router.get('/bootstrap', (_req, res) => {
   res.json({

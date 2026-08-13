@@ -109,11 +109,15 @@ exports.register = async (req, res) => {
 exports.login = (req, res, next) => {
   passport.authenticate('local', { session: false }, async (err, user, info) => {
     if (err) {
-      return res.status(500).json({ message: 'Server error', error: err.message });
+      console.error('Login error:', err.message);
+      return res.status(500).json({ message: 'Server error' });
     }
 
     if (!user) {
-      return res.status(400).json({ message: 'Credenciales inválidas', info });
+      // `info` distinguishes "user not found" from "wrong password", which
+      // lets an attacker enumerate valid accounts. Keep it server-side only.
+      console.warn('Failed login attempt:', info && info.message);
+      return res.status(400).json({ message: 'Credenciales inválidas' });
     }
 
     try {

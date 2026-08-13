@@ -5,7 +5,7 @@ const createUserRateLimiter = (maxRequests, windowMinutes = 1) => {
   return rateLimit({
     windowMs: windowMinutes * 60 * 1000,
     max: maxRequests,
-    keyGenerator: (req) => req.user ? req.user._id.toString() : ipKeyGenerator(req),
+    keyGenerator: (req) => req.user ? req.user._id.toString() : ipKeyGenerator(req.ip),
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many requests. Please try again later.' }
@@ -27,7 +27,7 @@ const measurementDeleteLimiter = createUserRateLimiter(
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  keyGenerator: (req) => ipKeyGenerator(req),
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many login attempts. Please try again later.' }
@@ -36,7 +36,7 @@ const loginLimiter = rateLimit({
 const refreshLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
-  keyGenerator: (req) => ipKeyGenerator(req),
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many refresh attempts. Please try again later.' }
@@ -45,7 +45,7 @@ const refreshLimiter = rateLimit({
 const forgotPasswordLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
-  keyGenerator: (req) => ipKeyGenerator(req),
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many password reset requests. Please try again later.' }
