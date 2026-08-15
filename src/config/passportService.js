@@ -20,7 +20,7 @@ passport.use(
     },
     async (identifier, password, done) => {
       try {
-        console.log('🔍 Buscando usuario con:', identifier);
+        // Identifiers are PII; do not log them.
 
         // Buscar usuario por email o username
         const user = await User.findOne({
@@ -28,18 +28,18 @@ passport.use(
         });
 
         if (!user) {
-          console.warn('⚠️ Usuario no encontrado:', identifier);
+          console.warn('Login failed: user not found');
           return done(null, false, { message: 'Usuario no encontrado' });
         }
 
         // Comparar la contraseña encriptada
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-          console.warn('❌ Contraseña incorrecta para:', identifier);
+          console.warn('Login failed: bad password');
           return done(null, false, { message: 'Credenciales inválidas' });
         }
 
-        console.log('✅ Login exitoso para:', user.username);
+        console.log('Login OK for user id', user._id.toString());
         return done(null, user);
       } catch (error) {
         console.error('🚨 Error en autenticación local:', error);
@@ -60,15 +60,13 @@ const opts = {
 passport.use(
   new JwtStrategy(opts, async (jwt_payload, done) => {
     try {
-      console.log('🔍 Verificando JWT para usuario ID:', jwt_payload.id);
 
       const user = await User.findById(jwt_payload.id);
       if (!user) {
-        console.warn('⚠️ Usuario no encontrado con ID:', jwt_payload.id);
+        console.warn('JWT references unknown user id');
         return done(null, false);
       }
 
-      console.log('✅ Usuario autenticado con JWT:', user.username);
       return done(null, user);
     } catch (error) {
       console.error('🚨 Error en la estrategia JWT:', error);

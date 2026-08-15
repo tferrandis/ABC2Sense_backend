@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const firmwareController = require('../controllers/firmwareController');
-const adminAuth = require('../middleware/adminAuth');
+const adminAuth = require('../middlewares/adminAuth');
 
 // Public routes (for IoT devices)
 router.get('/catalog', firmwareController.getCatalog);
